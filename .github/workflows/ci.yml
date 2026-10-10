@@ -102,6 +102,20 @@ jobs:
         if: runner.os == 'Windows'
         run: python scripts/check-health.py target/debug/onyx.exe
 
+      # The exit test of P4. The device mapper builds a fake drive, and Onyx
+      # must find it. fio runs the jobs of CrystalDiskMark, and the speeds of
+      # Onyx must be within 10 percent of them. The benchmark uses a release
+      # build, as a person does.
+      - name: find a fake drive on Linux
+        if: runner.os == 'Linux'
+        run: sudo scripts/check-capacity.sh target/debug/onyx
+      - name: compare the benchmarks with fio on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y fio
+          cargo build --release -p onyx --locked
+          python3 scripts/check-bench.py target/release/onyx "$RUNNER_TEMP"
+
   # A shim that belongs to one host is compiled only on that host, so a break
   # in it waits for that job. `cargo clippy` does not link, so this catches
   # the break from Linux in about a minute.
