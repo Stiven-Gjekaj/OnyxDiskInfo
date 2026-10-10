@@ -35,6 +35,40 @@ pub enum Error {
         /// What the host refused.
         what: String,
     },
+    /// The drive is the one that the running system starts from.
+    ///
+    /// No option allows a write to it.
+    SystemDisk {
+        /// The drive, as the list names it.
+        name: String,
+    },
+    /// The host says that the drive refuses each write.
+    ReadOnly {
+        /// The drive, as the list names it.
+        name: String,
+    },
+    /// The drive is not one that Onyx can prove is removable, and the person
+    /// did not pass `--force`.
+    NotRemovable {
+        /// The drive, as the list names it.
+        name: String,
+    },
+    /// The drive at that number is not the drive that the person saw.
+    DriveChanged {
+        /// What the person asked for.
+        wanted: String,
+        /// What is there now.
+        found: String,
+    },
+    /// The person did not type the phrase that confirms the drive.
+    NotConfirmed,
+    /// A file system holds a part of the drive.
+    Mounted {
+        /// The drive, as the list names it.
+        name: String,
+        /// What holds it, such as a mount point.
+        by: String,
+    },
     /// No drive carries this name or this number.
     NoSuchDrive {
         /// The name or the number that the person gave.
@@ -69,6 +103,24 @@ impl fmt::Display for Error {
             Error::NeedsPrivilege { what } => write!(
                 f,
                 "{what} needs administrator rights. Run the command again with sudo, or from an administrator shell"
+            ),
+            Error::SystemDisk { name } => write!(
+                f,
+                "{name} is the disk that this system starts from. Onyx never writes to it"
+            ),
+            Error::ReadOnly { name } => write!(f, "{name} refuses each write"),
+            Error::NotRemovable { name } => write!(
+                f,
+                "{name} is not a removable drive. Add --force if you mean to erase it"
+            ),
+            Error::DriveChanged { wanted, found } => write!(
+                f,
+                "the drive changed: you asked for {wanted}, and {found} is there now. Run `onyx list` again"
+            ),
+            Error::NotConfirmed => write!(f, "the phrase did not match, so nothing was written"),
+            Error::Mounted { name, by } => write!(
+                f,
+                "{name} is in use: {by}. Eject or unmount it, and try again"
             ),
             Error::NoSuchDrive { wanted } => {
                 write!(f, "no drive is {wanted}. Run `onyx list` to see the drives")
