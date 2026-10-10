@@ -17,6 +17,7 @@ drive.
 The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
 open, because no SATA drive is at hand.
 P3 is done but for its first half, which needs a SATA drive in a USB case.
+P4 is done. P5 is next.
 
 ```mermaid
 flowchart LR
@@ -152,6 +153,28 @@ Exit test: the fake capacity test finds a disk image that claims more space
 than it has.
 The benchmark numbers on one drive are within 10 percent of CrystalDiskMark
 or `fio`.
+
+Result: done, on Linux in CI.
+
+- `scripts/check-capacity.sh` builds a fake drive with the device mapper: 256
+  MiB whose four quarters map onto the same 64 MiB of a loop device. Onyx
+  calls it fake, finds that it wraps every 64 MiB, and brackets the real end
+  between 66,960,896 and 67,223,552 bytes. A loop device of 64 MiB is the
+  control, and Onyx calls it genuine.
+- `scripts/check-bench.py` runs the eight
+  jobs of CrystalDiskMark with fio and with `onyx bench --file`, on the same
+  runner. Each speed of Onyx is within 10 percent of fio. The widest gap in
+  the run of 2026-10-10 was 6.4 percent, for RND4K Q1T1 writes.
+
+What the first run of the capacity test found: a fake drive rarely puts its
+real end on the start of a probe, so the first probe past the end reads back
+from the middle of a probe below. The first version marked only the start of
+each probe, and called that a dropped write. Each sector of 512 bytes now
+carries its own address.
+
+Not yet run on a real drive: the surface scan, the write test, and the
+capacity test. They ran on memory, on files, and on the device mapper. A scan
+of the USB stick of P3 takes about 100 minutes, and the write test erases it.
 
 ## P5: the desktop app
 
