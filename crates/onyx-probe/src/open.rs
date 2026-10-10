@@ -87,6 +87,54 @@ pub fn open_test_file(path: &std::path::Path) -> Result<File> {
     Ok(file)
 }
 
+/// Open an image for a disk test: a regular file, or on Linux a block device
+/// that no list shows, such as one of the device mapper. Give back the file
+/// and its size.
+///
+/// A block device opens with `O_EXCL` for a write, so the kernel refuses one
+/// that a file system or another program holds. That covers a root file
+/// system on LVM, which a person could otherwise name here. On macOS and on
+/// Windows a block device is refused: the drive list and its checks reach
+/// those.
+pub fn open_image(path: &std::path::Path, access: Access) -> Result<(File, u64)> {
+    use std::io::{Seek, SeekFrom};
+    let what = path.display().to_string();
+    let metadata = std::fs::metadata(path).map_err(|e| refused(e, &what))?;
+    let file_type = metadata.file_type();
+    let device = !file_type.is_file();
+    if device && !cfg!(target_os = "linux") {
+        return Err(onyx_core::Error::host(
+            what,
+            "this is not a regular file. Give the number of the drive from `onyx list`",
+        ));
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(access == Access::Write);
+    #[cfg(target_os = "linux")]
+    if device && access == Access::Write {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_EXCL);
+    }
+    let mut file = options.open(path).map_err(|e| {
+        #[cfg(target_os = "linux")]
+        if e.raw_os_error() == Some(libc::EBUSY) {
+            return onyx_core::Error::Mounted {
+                name: what.clone(),
+                by: "a file system or another program holds it".to_string(),
+            };
+        }
+        refused(e, &what)
+    })?;
+    // A block device reports no length of its own, and a seek to its end
+    // gives the size on Linux.
+    let size = if device {
+        file.seek(SeekFrom::End(0))?
+    } else {
+        metadata.len()
+    };
+    Ok((file, size))
+}
+
 /// The error for a call that the host refused, with missing rights as their
 /// own error.
 pub(crate) fn refused(e: std::io::Error, what: &str) -> onyx_core::Error {
@@ -96,5 +144,27 @@ pub(crate) fn refused(e: std::io::Error, what: &str) -> onyx_core::Error {
         }
     } else {
         onyx_core::Error::Io(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_image_file_opens_with_its_length_as_its_size() {
+        let path = std::env::temp_dir().join(format!("onyx-image-{}", std::process::id()));
+        std::fs::write(&path, vec![0u8; 8192]).unwrap();
+        let (_, size) = open_image(&path, Access::Read).unwrap();
+        assert_eq!(size, 8192);
+        let (_, size) = open_image(&path, Access::Write).unwrap();
+        assert_eq!(size, 8192);
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn a_missing_image_is_an_error() {
+        let path = std::env::temp_dir().join("onyx-image-that-is-not-there");
+        assert!(open_image(&path, Access::Read).is_err());
     }
 }
