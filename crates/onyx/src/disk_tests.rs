@@ -169,8 +169,14 @@ fn prepare(device: &dyn Device, span: u64) -> Result<()> {
 }
 
 /// `onyx bench --file <path>`: read and write jobs in a test file, which
-/// goes at the end.
-pub fn run_bench_file(path: &Path, size_mib: u64, seconds: u64, json: bool) -> Result<i32> {
+/// goes at the end unless `keep` is true.
+pub fn run_bench_file(
+    path: &Path,
+    size_mib: u64,
+    seconds: u64,
+    keep: bool,
+    json: bool,
+) -> Result<i32> {
     if path.exists() {
         return Err(Error::host(
             path.display().to_string(),
@@ -184,7 +190,11 @@ pub fn run_bench_file(path: &Path, size_mib: u64, seconds: u64, json: bool) -> R
     eprintln!("Filling the test file of {}", human_size(span));
     let result = prepare(&device, span).and_then(|()| run_jobs(&device, span, seconds, true));
     drop(device);
-    let removed = std::fs::remove_file(path);
+    let removed = if keep {
+        Ok(())
+    } else {
+        std::fs::remove_file(path)
+    };
     let (reads, writes) = result?;
     removed?;
     if json {
