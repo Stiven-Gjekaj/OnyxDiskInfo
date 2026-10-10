@@ -175,6 +175,18 @@ pub fn identity(
     (at("vendor"), model, at("serial"))
 }
 
+/// The firmware revision, when the drive carries one.
+///
+/// Each bus puts it in a different file. An NVMe controller writes
+/// `firmware_rev`. A SCSI or an ATA drive writes `rev`, which SCSI limits to
+/// four characters, so a longer ATA revision arrives cut short until Onyx
+/// reads the drive itself. An eMMC chip writes `fwrev`.
+pub fn firmware(fs: &dyn SysfsSource, name: &str) -> Option<String> {
+    ["firmware_rev", "rev", "fwrev"]
+        .iter()
+        .find_map(|leaf| attribute(fs, &format!("{BLOCK}/{name}/device/{leaf}")))
+}
+
 /// One line of `/proc/self/mountinfo`, reduced to what matters here.
 #[derive(Debug, PartialEq, Eq)]
 pub struct MountSource {
@@ -500,6 +512,7 @@ pub fn drive(fs: &dyn SysfsSource, name: &str, system: &BTreeSet<String>) -> Opt
     info.vendor = vendor;
     info.model = model;
     info.serial = serial;
+    info.firmware = firmware(fs, name);
     info.size_bytes = size;
     info.logical_sector_size = logical_sector_size(fs, name);
     info.physical_sector_size = physical_sector_size(fs, name);
@@ -1143,6 +1156,29 @@ mod tests {
         assert_eq!(vendor, None);
         assert_eq!(model.as_deref(), Some("SD32G"));
         assert_eq!(serial, None);
+    }
+
+    #[test]
+    fn an_nvme_drive_gives_its_firmware_from_the_controller() {
+        let fs = MapSysfs::new().file("/sys/block/nvme0n1/device/firmware_rev", "3B2QGXA7\n");
+        assert_eq!(firmware(&fs, "nvme0n1").as_deref(), Some("3B2QGXA7"));
+    }
+
+    #[test]
+    fn a_scsi_drive_gives_its_firmware_from_rev() {
+        let fs = MapSysfs::new().file("/sys/block/sda/device/rev", "1B6Q\n");
+        assert_eq!(firmware(&fs, "sda").as_deref(), Some("1B6Q"));
+    }
+
+    #[test]
+    fn an_emmc_chip_gives_its_firmware_from_fwrev() {
+        let fs = MapSysfs::new().file("/sys/block/mmcblk0/device/fwrev", "0x6\n");
+        assert_eq!(firmware(&fs, "mmcblk0").as_deref(), Some("0x6"));
+    }
+
+    #[test]
+    fn a_drive_with_no_revision_file_has_no_firmware() {
+        assert!(firmware(&MapSysfs::new(), "sda").is_none());
     }
 
     #[test]
