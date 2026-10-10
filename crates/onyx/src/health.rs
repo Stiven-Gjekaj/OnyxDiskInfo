@@ -10,12 +10,12 @@ pub fn run(number: usize, json: bool) -> Result<i32> {
     let drive = by_index(&drives, number).ok_or_else(|| Error::NoSuchDrive {
         wanted: number.to_string(),
     })?;
-    let report = onyx_probe::read_health(drive)?.decode()?;
+    let record = onyx_probe::health_record(drive)?;
 
     if json {
-        println!("{}", report::json(drive, &report));
+        println!("{}", report::json(drive, &record));
     } else {
-        for line in report::text(drive, &report) {
+        for line in report::text(drive, &record) {
             println!("{line}");
         }
     }
