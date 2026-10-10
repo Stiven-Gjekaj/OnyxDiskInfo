@@ -7,4 +7,5 @@
 #[cfg(target_os = "linux")]
 pub mod host;
 pub mod parse;
+pub mod passthru;
 pub mod source;
