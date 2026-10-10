@@ -96,6 +96,86 @@ pub fn kelvin_to_celsius(kelvin: u16) -> Option<i32> {
     (kelvin != 0).then(|| i32::from(kelvin) - 273)
 }
 
+/// The size of the Identify Controller data structure, in bytes.
+pub const IDENTIFY_BYTES: usize = 4096;
+
+/// The Identify Controller data structure, as far as Onyx reads it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Controller {
+    /// The PCI vendor identifier.
+    pub vendor_id: u16,
+    /// The PCI subsystem vendor identifier.
+    pub subsystem_vendor_id: u16,
+    pub serial: Option<String>,
+    pub model: Option<String>,
+    pub firmware: Option<String>,
+    /// The IEEE OUI of the maker.
+    pub ieee_oui: u32,
+    pub controller_id: u16,
+    /// The version of the specification, as `(major, minor, tertiary)`.
+    ///
+    /// A controller older than version 1.2 gives zero here.
+    pub version: Option<(u16, u8, u8)>,
+    /// The warning composite temperature threshold, in kelvin.
+    pub warning_temperature_kelvin: Option<u16>,
+    /// The critical composite temperature threshold, in kelvin.
+    pub critical_temperature_kelvin: Option<u16>,
+    /// The total capacity of the NVM, in bytes, when the drive gives it.
+    pub total_capacity: Option<u128>,
+    pub namespaces: u32,
+}
+
+/// Read an ASCII field that the drive pads with spaces.
+///
+/// A byte that is not printable ASCII ends the field, so a drive that fills
+/// the field with zeros or with noise does not put noise in a name.
+fn text_at(bytes: &[u8], offset: usize, length: usize) -> Option<String> {
+    let field = bytes.get(offset..offset + length)?;
+    let end = field
+        .iter()
+        .position(|b| !(b.is_ascii_graphic() || *b == b' '))
+        .unwrap_or(field.len());
+    let text = String::from_utf8_lossy(&field[..end]).trim().to_string();
+    (!text.is_empty()).then_some(text)
+}
+
+/// Read the Identify Controller data structure.
+///
+/// The fields that Onyx reads end at byte 520. A shorter buffer is an error.
+pub fn controller(bytes: &[u8]) -> Result<Controller> {
+    const READ: usize = 520;
+    if bytes.len() < READ {
+        return Err(Error::host(
+            "NVMe identify controller",
+            format!("{} bytes, and Onyx reads {READ}", bytes.len()),
+        ));
+    }
+    let oui = u32::from(byte_at(bytes, 73))
+        | u32::from(byte_at(bytes, 74)) << 8
+        | u32::from(byte_at(bytes, 75)) << 16;
+    let version = u32_at(bytes, 80);
+    let kelvin = |offset| Some(u16_at(bytes, offset)).filter(|k| *k != 0);
+    Ok(Controller {
+        vendor_id: u16_at(bytes, 0),
+        subsystem_vendor_id: u16_at(bytes, 2),
+        serial: text_at(bytes, 4, 20),
+        model: text_at(bytes, 24, 40),
+        firmware: text_at(bytes, 64, 8),
+        ieee_oui: oui,
+        controller_id: u16_at(bytes, 78),
+        version: (version != 0).then_some((
+            (version >> 16) as u16,
+            (version >> 8) as u8,
+            version as u8,
+        )),
+        warning_temperature_kelvin: kelvin(266),
+        critical_temperature_kelvin: kelvin(268),
+        total_capacity: Some(u128_at(bytes, 280)).filter(|c| *c != 0),
+        namespaces: u32_at(bytes, 516),
+    })
+}
+
 fn u16_at(bytes: &[u8], offset: usize) -> u16 {
     let mut word = [0u8; 2];
     if let Some(b) = bytes.get(offset..offset + 2) {
@@ -198,6 +278,75 @@ pub(crate) mod tests {
                 (0x90, "0b"),
             ],
         )
+    }
+
+    /// The identify data of the same drive, captured with
+    /// `smartctl -r ioctl,2 -i`. Only the first 528 bytes matter here.
+    pub(crate) fn apple_ssd_identify() -> Vec<u8> {
+        buffer(
+            IDENTIFY_BYTES,
+            &[
+                (
+                    0x00,
+                    "6b106b1030356231373161633365323961303265202020204150504c4520535344\
+                     204150303531325a20202020202020202020202020202020202020202020203234\
+                     312e302e3132040000000008",
+                ),
+                (0x100, "040000010200000001"),
+                (0x148, "04"),
+                (0x200, "76440000030000000400000000010000000001"),
+            ],
+        )
+    }
+
+    #[test]
+    fn the_identify_data_of_a_real_drive_gives_what_smartctl_gave() {
+        let c = controller(&apple_ssd_identify()).unwrap();
+        assert_eq!(c.vendor_id, 0x106b);
+        assert_eq!(c.subsystem_vendor_id, 0x106b);
+        assert_eq!(c.serial.as_deref(), Some("05b171ac3e29a02e"));
+        assert_eq!(c.model.as_deref(), Some("APPLE SSD AP0512Z"));
+        assert_eq!(c.firmware.as_deref(), Some("241.0.12"));
+        assert_eq!(c.ieee_oui, 0);
+        assert_eq!(c.controller_id, 0);
+        // smartctl says "<1.2", which is a version of zero.
+        assert_eq!(c.version, None);
+        assert_eq!(c.namespaces, 3);
+        assert_eq!(c.warning_temperature_kelvin, None);
+        assert_eq!(c.total_capacity, None);
+    }
+
+    #[test]
+    fn a_version_reads_as_major_minor_and_tertiary() {
+        let mut bytes = apple_ssd_identify();
+        bytes[80..84].copy_from_slice(&0x0001_0400u32.to_le_bytes());
+        assert_eq!(controller(&bytes).unwrap().version, Some((1, 4, 0)));
+    }
+
+    #[test]
+    fn the_temperature_thresholds_are_read_in_kelvin() {
+        let mut bytes = apple_ssd_identify();
+        bytes[266..268].copy_from_slice(&356u16.to_le_bytes());
+        bytes[268..270].copy_from_slice(&358u16.to_le_bytes());
+        let c = controller(&bytes).unwrap();
+        assert_eq!(c.warning_temperature_kelvin, Some(356));
+        assert_eq!(c.critical_temperature_kelvin, Some(358));
+    }
+
+    #[test]
+    fn a_name_field_of_zeros_or_noise_is_absent() {
+        let mut bytes = apple_ssd_identify();
+        bytes[4..24].fill(0);
+        bytes[24] = 0xff;
+        let c = controller(&bytes).unwrap();
+        assert_eq!(c.serial, None);
+        assert_eq!(c.model, None);
+    }
+
+    #[test]
+    fn an_identify_buffer_too_short_is_an_error_and_not_a_panic() {
+        assert!(controller(&[0u8; 519]).is_err());
+        assert!(controller(&[0u8; 520]).is_ok());
     }
 
     #[test]
