@@ -16,8 +16,8 @@ export component DriveTabButton inherits Rectangle {
 
     min-width: 120px;
     border-radius: Theme.radius;
-    // A screen reader and a test press the tab as a button.
-    accessible-role: button;
+    // A screen reader and a test press the tab as a tab.
+    accessible-role: tab;
     accessible-label: root.title;
     accessible-description: root.verdict-text + ", " + root.temperature;
     accessible-action-default => { root.clicked(); }
