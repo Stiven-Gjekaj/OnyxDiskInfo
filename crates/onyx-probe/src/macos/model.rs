@@ -118,6 +118,19 @@ impl RegistrySnapshot {
             .find_map(|n| n.get(key).and_then(Value::as_dict))
     }
 
+    /// Find a text on a node or on the first ancestor that carries it.
+    ///
+    /// The nearest one wins, so a drive behind a hub takes its own value and
+    /// not the one of the hub.
+    pub fn find_text(&self, index: usize, key: &str) -> Option<&str> {
+        let own = self.nodes.get(index)?.get(key).and_then(Value::as_text);
+        if own.is_some() {
+            return own;
+        }
+        self.ancestors(index)
+            .find_map(|n| n.get(key).and_then(Value::as_text))
+    }
+
     /// The value of one property on a node.
     pub fn get(&self, index: usize, key: &str) -> Option<&Value> {
         self.nodes.get(index)?.get(key)

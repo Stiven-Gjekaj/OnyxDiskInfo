@@ -143,7 +143,16 @@ pub fn drive_from_media(
     };
     let vendor = text("Vendor Name");
     let model = text("Product Name");
-    let serial = text("Serial Number");
+    // A USB drive keeps its serial number on the USB device, above the
+    // controller. Measured: `system_profiler` shows the serial of a USB
+    // stick, and `Device Characteristics` has none.
+    let serial = text("Serial Number").or_else(|| {
+        snapshot
+            .find_text(index, "USB Serial Number")
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(str::to_string)
+    });
     let firmware = text("Product Revision Level");
 
     let protocol = snapshot.find_dict(index, "Protocol Characteristics");
@@ -423,6 +432,44 @@ mod tests {
         assert_eq!(d.name, "SanDisk Ultra");
         assert_eq!(d.bus, Bus::Usb);
         assert_eq!(d.connection, Connection::External);
+    }
+
+    /// A USB stick: the USB device above the controller carries the serial.
+    fn usb_stick(device_serial: &str) -> RegistrySnapshot {
+        let device = Node::new("IOUSBHostDevice")
+            .with("USB Serial Number", Value::Text(device_serial.to_string()));
+        let mut t = one_drive("disk4", 128_320_801_792, "USB", "External");
+        t.nodes[0].parent = Some(2);
+        t.nodes.push(device);
+        t
+    }
+
+    #[test]
+    fn a_usb_drive_takes_its_serial_from_the_usb_device_above_it() {
+        let t = usb_stick("0359225050001681");
+        let d = drive_from_media(&t, 1, &BTreeSet::new()).unwrap();
+        assert_eq!(d.serial.as_deref(), Some("0359225050001681"));
+    }
+
+    #[test]
+    fn the_serial_of_the_drive_wins_over_the_serial_of_the_usb_device() {
+        let mut t = usb_stick("FROMUSB");
+        t.nodes[0] = t.nodes[0].clone().with(
+            "Device Characteristics",
+            Value::Dict(BTreeMap::from([(
+                "Serial Number".to_string(),
+                Value::Text("FROMDRIVE".to_string()),
+            )])),
+        );
+        let d = drive_from_media(&t, 1, &BTreeSet::new()).unwrap();
+        assert_eq!(d.serial.as_deref(), Some("FROMDRIVE"));
+    }
+
+    #[test]
+    fn a_usb_device_with_an_empty_serial_gives_none() {
+        let t = usb_stick("   ");
+        let d = drive_from_media(&t, 1, &BTreeSet::new()).unwrap();
+        assert!(d.serial.is_none());
     }
 
     #[test]
