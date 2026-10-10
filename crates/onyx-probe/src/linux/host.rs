@@ -20,6 +20,10 @@ impl SysfsSource for RealSysfs {
         fs::read_to_string(path)
     }
 
+    fn read_bytes(&self, path: &str) -> io::Result<Vec<u8>> {
+        fs::read(path)
+    }
+
     fn read_dir(&self, path: &str) -> io::Result<Vec<String>> {
         let mut names = Vec::new();
         for entry in fs::read_dir(path)? {

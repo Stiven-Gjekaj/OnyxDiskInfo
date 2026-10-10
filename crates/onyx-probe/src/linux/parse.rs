@@ -172,7 +172,38 @@ pub fn identity(
     let at = |leaf: &str| attribute(fs, &format!("{BLOCK}/{name}/device/{leaf}"));
     // An SD card has no vendor and no model. It has a name instead.
     let model = at("model").or_else(|| at("name"));
-    (at("vendor"), model, at("serial"))
+    let serial = at("serial").or_else(|| {
+        let page = fs
+            .read_bytes(&format!("{BLOCK}/{name}/device/vpd_pg80"))
+            .ok()?;
+        unit_serial_number(&page)
+    });
+    (at("vendor"), model, serial)
+}
+
+/// The serial number from page 0x80 of the vital product data.
+///
+/// A SATA drive has no `serial` file in `sysfs`. The kernel gives the page
+/// instead: a header of four bytes, then the serial number in ASCII. The
+/// third and the fourth byte give its length, big endian. The page is
+/// binary, so a byte that is not ASCII ends the read here and does not end
+/// up in a name.
+pub fn unit_serial_number(page: &[u8]) -> Option<String> {
+    let (header, rest) = page.split_at_checked(4)?;
+    if header[1] != 0x80 {
+        return None;
+    }
+    let length = usize::from(u16::from_be_bytes([header[2], header[3]]));
+    let body = rest.get(..length).unwrap_or(rest);
+    if !body
+        .iter()
+        .all(|b| b.is_ascii_graphic() || *b == b' ' || *b == 0)
+    {
+        return None;
+    }
+    let text = String::from_utf8_lossy(body);
+    let serial = text.trim_matches(|c: char| c == ' ' || c == '\0');
+    (!serial.is_empty()).then(|| serial.to_string())
 }
 
 /// The firmware revision, when the drive carries one.
@@ -1156,6 +1187,53 @@ mod tests {
         assert_eq!(vendor, None);
         assert_eq!(model.as_deref(), Some("SD32G"));
         assert_eq!(serial, None);
+    }
+
+    #[test]
+    fn a_sata_drive_gives_its_serial_from_the_product_data_page() {
+        let mut page = vec![0x00, 0x80, 0x00, 0x14];
+        page.extend_from_slice(b"      S4EWNX0R123456 ");
+        page.truncate(4 + 0x14);
+        let fs = MapSysfs::new().bytes("/sys/block/sda/device/vpd_pg80", &page);
+        let (_, _, serial) = identity(&fs, "sda");
+        assert_eq!(serial.as_deref(), Some("S4EWNX0R123456"));
+    }
+
+    #[test]
+    fn the_serial_file_wins_over_the_product_data_page() {
+        let fs = MapSysfs::new()
+            .file("/sys/block/sda/device/serial", "FROMFILE\n")
+            .bytes("/sys/block/sda/device/vpd_pg80", b"\x00\x80\x00\x04PAGE");
+        let (_, _, serial) = identity(&fs, "sda");
+        assert_eq!(serial.as_deref(), Some("FROMFILE"));
+    }
+
+    #[test]
+    fn a_page_with_another_code_gives_no_serial() {
+        assert!(unit_serial_number(b"\x00\x83\x00\x04ABCD").is_none());
+    }
+
+    #[test]
+    fn a_page_shorter_than_its_header_gives_no_serial() {
+        assert!(unit_serial_number(b"\x00\x80").is_none());
+    }
+
+    #[test]
+    fn a_length_past_the_end_of_the_page_reads_what_is_there() {
+        assert_eq!(
+            unit_serial_number(b"\x00\x80\x00\xffABCD").as_deref(),
+            Some("ABCD")
+        );
+    }
+
+    #[test]
+    fn a_page_of_binary_bytes_gives_no_serial() {
+        assert!(unit_serial_number(b"\x00\x80\x00\x04\xff\xfe\x01\x02").is_none());
+    }
+
+    #[test]
+    fn a_page_of_only_padding_gives_no_serial() {
+        assert!(unit_serial_number(b"\x00\x80\x00\x04    ").is_none());
     }
 
     #[test]

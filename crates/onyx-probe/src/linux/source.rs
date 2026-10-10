@@ -13,6 +13,10 @@ pub trait SysfsSource {
     /// The contents of one attribute file.
     fn read_file(&self, path: &str) -> io::Result<String>;
 
+    /// The raw contents of one binary attribute file, such as a page of
+    /// vital product data.
+    fn read_bytes(&self, path: &str) -> io::Result<Vec<u8>>;
+
     /// The names inside one directory, in any order.
     fn read_dir(&self, path: &str) -> io::Result<Vec<String>>;
 
@@ -48,6 +52,7 @@ pub(crate) mod fake {
     #[derive(Default, Debug)]
     pub(crate) struct MapSysfs {
         files: BTreeMap<String, String>,
+        binary: BTreeMap<String, Vec<u8>>,
         dirs: BTreeMap<String, Vec<String>>,
         links: BTreeMap<String, String>,
     }
@@ -59,6 +64,11 @@ pub(crate) mod fake {
 
         pub(crate) fn file(mut self, path: &str, contents: &str) -> Self {
             self.files.insert(path.to_string(), contents.to_string());
+            self
+        }
+
+        pub(crate) fn bytes(mut self, path: &str, contents: &[u8]) -> Self {
+            self.binary.insert(path.to_string(), contents.to_vec());
             self
         }
 
@@ -79,6 +89,13 @@ pub(crate) mod fake {
     impl SysfsSource for MapSysfs {
         fn read_file(&self, path: &str) -> io::Result<String> {
             self.files
+                .get(path)
+                .cloned()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, path.to_string()))
+        }
+
+        fn read_bytes(&self, path: &str) -> io::Result<Vec<u8>> {
+            self.binary
                 .get(path)
                 .cloned()
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, path.to_string()))
