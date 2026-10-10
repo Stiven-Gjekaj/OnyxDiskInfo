@@ -11,5 +11,13 @@ authors.workspace = true
 [dependencies]
 onyx-core.workspace = true
 
+
+# The bindings of one host never reach the other two. Each one is raw, so the
+# shim that uses it stays thin and the decisions stay in a pure module that
+# every host compiles.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "=0.10.1"
+io-kit-sys = "=0.4.1"
+
 [lints]
 workspace = true

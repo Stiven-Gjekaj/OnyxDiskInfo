@@ -13,6 +13,7 @@
 use onyx_core::{DriveList, Result};
 
 pub mod linux;
+pub mod macos;
 
 /// The drive list of the host that this build runs on.
 ///
@@ -23,7 +24,11 @@ pub fn drive_list() -> Result<Box<dyn DriveList>> {
     {
         Ok(Box::new(linux::host::LinuxDrives))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        Ok(Box::new(macos::host::MacosDrives))
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         Err(onyx_core::Error::Unsupported {
             target: std::env::consts::OS,
