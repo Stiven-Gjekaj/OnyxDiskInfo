@@ -28,5 +28,9 @@ slint.workspace = true
 [build-dependencies]
 slint-build.workspace = true
 
+# Puts the manifest that asks for administrator rights into the .exe file.
+[target.'cfg(windows)'.build-dependencies]
+winresource.workspace = true
+
 [lints]
 workspace = true
