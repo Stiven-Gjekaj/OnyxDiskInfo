@@ -7,6 +7,7 @@
 
 pub mod ata;
 mod drive;
+pub mod emmc;
 mod error;
 pub mod health;
 mod listing;
