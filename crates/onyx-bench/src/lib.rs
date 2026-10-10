@@ -9,5 +9,6 @@
 pub mod capacity;
 mod device;
 pub mod scan;
+pub mod verify;
 
 pub use device::{AlignedBuffer, Device, FileDevice, MemoryDevice};

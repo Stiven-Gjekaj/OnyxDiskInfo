@@ -91,7 +91,7 @@ pub fn probe_offsets(size: u64, sector: u32, probes: u64, block: u64) -> Vec<u64
 }
 
 /// A small generator of bytes that no drive makes up by chance.
-fn fill(block: &mut [u8], run: u64, offset: u64) {
+pub(crate) fn fill(block: &mut [u8], run: u64, offset: u64) {
     let mut state = run ^ offset.rotate_left(17) ^ 0x9e37_79b9_7f4a_7c15;
     for chunk in block.chunks_mut(8) {
         state ^= state << 13;
