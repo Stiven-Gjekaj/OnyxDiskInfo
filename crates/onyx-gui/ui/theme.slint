@@ -6,9 +6,15 @@ import { Palette } from "std-widgets.slint";
 
 export enum Verdict { good, caution, bad, unknown }
 
+export enum ThemePreference { system, light, dark }
+
 export global Theme {
-    // The scheme of the system, which a setting or a test can override.
-    in-out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+    // The system scheme, or one that a setting or a test chooses. The main
+    // window gives a chosen scheme to the standard widgets as well.
+    in-out property <ThemePreference> preference: ThemePreference.system;
+    out property <bool> dark: preference == ThemePreference.dark ? true
+        : preference == ThemePreference.light ? false
+        : Palette.color-scheme == ColorScheme.dark;
 
     // Type.
     out property <length> font-size: 13px;

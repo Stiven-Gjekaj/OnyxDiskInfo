@@ -2,12 +2,12 @@
 // CrystalDiskInfo: the drives at the top, the health and the temperature on
 // the left, the details on the right, and the attributes under them.
 
-import { Button, ScrollView } from "std-widgets.slint";
-import { Theme, Verdict } from "theme.slint";
+import { Button, Palette, ScrollView } from "std-widgets.slint";
+import { Theme, ThemePreference, Verdict } from "theme.slint";
 import { AppData, Logic, DriveTab, InfoRow, AttributeRow } from "data.slint";
 import { DriveTabButton, Badge, AttributeTable } from "widgets.slint";
 
-export { AppData, Logic, DriveTab, InfoRow, AttributeRow, Theme, Verdict }
+export { AppData, Logic, DriveTab, InfoRow, AttributeRow, Theme, ThemePreference, Verdict }
 
 export component MainWindow inherits Window {
     title: "OnyxDiskInfo";
@@ -18,6 +18,19 @@ export component MainWindow inherits Window {
     min-height: 480px;
     background: Theme.background;
     default-font-size: Theme.font-size;
+
+    // A chosen scheme reaches the standard widgets, such as the buttons,
+    // through their palette.
+    property <ThemePreference> preference: Theme.preference;
+    changed preference => { self.apply-preference(); }
+    init => { self.apply-preference(); }
+    function apply-preference() {
+        if Theme.preference == ThemePreference.dark {
+            Palette.color-scheme = ColorScheme.dark;
+        } else if Theme.preference == ThemePreference.light {
+            Palette.color-scheme = ColorScheme.light;
+        }
+    }
 
     VerticalLayout {
         padding: Theme.gap-large;
