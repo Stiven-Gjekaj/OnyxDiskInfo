@@ -16,9 +16,12 @@ The first version of this script gave fio `queue` threads of its own. Each
 fio thread then read or wrote its own sequential stream, and Onyx shares one
 stream between its threads, so the two did not run the same job.
 
-The two tools run one after the other on a drive that other programs use as
-well, so two runs of the same tool also differ. The script prints each pair,
-so a person sees how far apart they are.
+fio runs twice, once before Onyx and once after it. A drive in a cloud
+changes its speed from minute to minute, and two runs of fio on the same
+runner differed by 7 percent. So a job passes when the speed of Onyx is
+within 10 percent of the range that the two runs of fio span: at least 90
+percent of the slower run, and at most 110 percent of the faster one. The
+script prints all three speeds, so a person sees how far apart they are.
 """
 
 import json
@@ -65,36 +68,44 @@ def main():
     fio_file = os.path.join(directory, "fio-bench.tmp")
     onyx_file = os.path.join(directory, "onyx-bench.tmp")
 
-    theirs = {}
-    try:
-        for name, read, write, bs, queue in JOBS:
-            theirs[(name, False)] = fio(fio_file, read, bs, queue)
-            theirs[(name, True)] = fio(fio_file, write, bs, queue)
-    finally:
-        if os.path.exists(fio_file):
-            os.remove(fio_file)
+    def fio_pass():
+        speeds = {}
+        try:
+            for name, read, write, bs, queue in JOBS:
+                speeds[(name, False)] = fio(fio_file, read, bs, queue)
+                speeds[(name, True)] = fio(fio_file, write, bs, queue)
+        finally:
+            if os.path.exists(fio_file):
+                os.remove(fio_file)
+        return speeds
 
+    before = fio_pass()
     done = subprocess.run(
         [onyx, "bench", "--file", onyx_file, "--seconds", str(SECONDS), "--json"],
         check=True, capture_output=True, text=True,
     )
     ours = {(j["job"], j["write"]): j["bytes_per_second"] for j in json.loads(done.stdout)["jobs"]}
+    after = fio_pass()
 
     failures = []
-    print(f"{'JOB':<12} {'SIDE':<5} {'ONYX MB/s':>10} {'FIO MB/s':>10} {'DIFF':>7}")
+    print(f"{'JOB':<12} {'SIDE':<5} {'FIO 1':>8} {'ONYX':>8} {'FIO 2':>8}  MB/s")
     for name, *_ in JOBS:
         for write in (False, True):
-            a, b = ours[(name, write)], theirs[(name, write)]
-            diff = (a - b) / b if b else float("inf")
+            key = (name, write)
+            low = min(before[key], after[key]) * (1 - LIMIT)
+            high = max(before[key], after[key]) * (1 + LIMIT)
             side = "write" if write else "read"
-            print(f"{name:<12} {side:<5} {a / 1e6:>10.1f} {b / 1e6:>10.1f} {diff:>+7.1%}")
-            if abs(diff) > LIMIT:
-                failures.append(f"{name} {side}: {diff:+.1%}")
+            mark = "" if low <= ours[key] <= high else "  outside"
+            print(f"{name:<12} {side:<5} {before[key] / 1e6:>8.1f} {ours[key] / 1e6:>8.1f} "
+                  f"{after[key] / 1e6:>8.1f}{mark}")
+            if mark:
+                failures.append(f"{name} {side}: {ours[key] / 1e6:.1f} MB/s is not between "
+                                f"{low / 1e6:.1f} and {high / 1e6:.1f}")
     for f in failures:
         print(f"FAIL {f}")
     if failures:
         sys.exit(1)
-    print("Each speed is within 10 percent of fio.")
+    print("Each speed is within 10 percent of the range of fio.")
 
 
 if __name__ == "__main__":
