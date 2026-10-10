@@ -18,8 +18,10 @@ The toolchain is Rust, and it needs nothing else.
     cargo test --workspace
     cargo run -p onyx -- list
     python3 scripts/check-list.py target/debug/onyx
+    sudo python3 scripts/check-health.py target/debug/onyx
 
-Those five are the gate, and they run on Windows, on macOS and on Linux.
+Those six are the gate, and they run on Windows, on macOS and on Linux.
+The last one needs smartctl, and root on Linux.
 The [README](README.md) says what is built so far.
 
 ## Ways to contribute
