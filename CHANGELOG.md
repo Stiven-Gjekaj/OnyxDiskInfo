@@ -8,4 +8,8 @@ Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- `onyx list` shows each drive on Windows, on macOS, and on Linux: the name,
+  the size, the bus, where it sits, the firmware, and the serial number.
+  `--json` prints the same list for a script.
