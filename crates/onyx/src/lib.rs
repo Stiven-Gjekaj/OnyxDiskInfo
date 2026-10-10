@@ -9,6 +9,7 @@ pub mod cli;
 pub mod format;
 pub mod json;
 pub mod list;
+pub mod report;
 
 use cli::{Cli, Command};
 
