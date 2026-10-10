@@ -81,20 +81,34 @@ pub enum Command {
         /// radio, and console reads it.
         #[arg(long, value_enum, default_value_t = TableChoice::Mbr)]
         table: TableChoice,
-        /// The name of the volume. FAT keeps 11 characters, and exFAT keeps
-        /// 11 too.
+        /// The name of the volume. FAT and exFAT keep 11 characters. ext4
+        /// keeps 16, and XFS keeps 12.
         #[arg(long, default_value = "ONYX")]
         label: String,
     },
 }
 
-/// A file system that `onyx format` writes.
+/// A file system that `onyx format` writes. Onyx writes the four FAT and
+/// exFAT file systems itself, on each host. A tool of the host writes the
+/// others: mkfs on Linux, diskutil on macOS, and Format-Volume on Windows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum FsChoice {
     Fat12,
     Fat16,
     Fat32,
     Exfat,
+    /// Linux and Windows.
+    Ntfs,
+    /// Linux.
+    Ext4,
+    /// Linux.
+    Btrfs,
+    /// Linux.
+    Xfs,
+    /// macOS, on a GPT.
+    Apfs,
+    /// macOS.
+    Hfsplus,
 }
 
 /// A partition table that `onyx format` writes.
