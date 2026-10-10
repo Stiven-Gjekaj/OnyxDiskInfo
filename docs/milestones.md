@@ -183,7 +183,30 @@ The app is then a view over code that works.
 
 Each host needs administrator rights to send pass-through commands.
 The command line runs with `sudo` or from an administrator shell.
-How the app gets these rights is an open question for phase 5.
+
+**The desktop app runs as the person, and one read runs as root.**
+This decision was made on 2026-10-10.
+
+- On Windows, the app asks for administrator rights when it starts, through
+  its manifest, as CrystalDiskInfo does. Each health command on Windows needs
+  them, so an app without them shows nothing.
+- On macOS and on Linux, the app runs as the person who starts it. macOS
+  reads an NVMe drive with no rights at all. A drive that needs root gets a
+  button. The button runs `onyx health <number> --json` through the password
+  dialog of the system, `osascript` on macOS and `pkexec` on Linux, and the
+  app reads the JSON that comes back.
+
+The app builds its view from the JSON of `onyx health --json`, for a drive
+that it reads itself and for one that the command line reads with rights. So
+the app cannot show other values than the command line prints.
+
+Options that lost:
+
+- Run the whole app as root on macOS and on Linux. A window that runs as root
+  reads and writes the files of root, and the desktop of the person does not
+  reach it.
+- A helper that stays running as root. It is a second program that listens,
+  and a bug in it gives root to anybody who reaches it.
 
 ---
 
