@@ -16,8 +16,7 @@ P2 passes its exit test for NVMe drives. The SATA half waits for a SATA
 drive.
 The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
 open, because no SATA drive is at hand.
-P3 is half done. Its open half needs a SATA drive in a USB case and a USB
-flash drive.
+P3 is done but for its first half, which needs a SATA drive in a USB case.
 
 ```mermaid
 flowchart LR
@@ -116,7 +115,8 @@ Work:
 Exit test: a SATA drive in a USB case shows its SMART.
 A USB flash drive with no SMART shows a record with a low confidence level.
 
-Result: half done.
+Result: the second half is done. The first half waits for a SATA drive in a
+USB case.
 
 - Done: each health record names its source and its confidence. A drive
   that reports nothing gets a measured record with a low confidence. CI
@@ -131,8 +131,10 @@ Result: half done.
   on Windows.
 - Open: a SATA drive in a USB case, which is the first half of the exit
   test. No such drive was at hand.
-- Open: a real USB flash drive. The measured path ran only on virtual disks.
-  On macOS it needs `sudo onyx health <number>`.
+- Done: a real USB flash drive. On 2026-10-10, `sudo onyx health 2` on macOS
+  read a 125.8 GB USB stick (VendorCo ProductCode, firmware 2.00). It has no
+  SMART, and it got a measured record: 64 reads, no failure, a median of
+  21.3 MB/s, the slowest read 52 ms, verdict Good, confidence low.
 - Not done, by decision: the vendor commands of JMicron, ASMedia, and
   Realtek bridges. [milestones.md](milestones.md) says why.
 - Not done, by decision: the SD health register, which is not a standard.
