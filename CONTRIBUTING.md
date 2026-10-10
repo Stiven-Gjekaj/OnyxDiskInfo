@@ -19,9 +19,13 @@ The toolchain is Rust, and it needs nothing else.
     cargo run -p onyx -- list
     python3 scripts/check-list.py target/debug/onyx
     sudo python3 scripts/check-health.py target/debug/onyx
+    sudo scripts/check-capacity.sh target/debug/onyx
+    python3 scripts/check-bench.py target/release/onyx /tmp
 
-Those six are the gate, and they run on Windows, on macOS and on Linux.
-The last one needs smartctl, and root on Linux.
+Those eight are the gate, and they run on Windows, on macOS and on Linux.
+`check-health.py` needs smartctl, and root on Linux.
+`check-capacity.sh` and `check-bench.py` run on Linux, and they need the
+device mapper and fio.
 The [README](README.md) says what is built so far.
 
 ## Ways to contribute
