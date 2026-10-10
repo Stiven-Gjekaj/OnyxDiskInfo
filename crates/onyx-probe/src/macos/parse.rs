@@ -232,6 +232,23 @@ pub fn system_disks(snapshot: &RegistrySnapshot, root_dev: Option<u64>) -> BTree
     out
 }
 
+/// The mount points that hold a part of one whole drive.
+///
+/// `mounts` gives the device number of each mounted file system and its mount
+/// point. A volume of an APFS container counts for the drive under the
+/// container, by the same walk that finds the system disk.
+pub fn holders(
+    snapshot: &RegistrySnapshot,
+    mounts: &[(u64, String)],
+    bsd_name: &str,
+) -> Vec<String> {
+    mounts
+        .iter()
+        .filter(|(dev, _)| system_disks(snapshot, Some(*dev)).contains(bsd_name))
+        .map(|(_, point)| point.clone())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::model::Node;
@@ -356,6 +373,21 @@ mod tests {
             got.contains("disk0"),
             "the physical drive must be marked, got {got:?}"
         );
+    }
+
+    #[test]
+    fn a_volume_in_a_container_holds_the_drive_under_the_container() {
+        let t = apple_silicon();
+        let mounts = vec![((1 << 24) | 14, "/".to_string())];
+        assert_eq!(holders(&t, &mounts, "disk0"), ["/"]);
+        assert!(holders(&t, &mounts, "disk4").is_empty());
+    }
+
+    #[test]
+    fn a_mount_of_another_drive_holds_nothing_here() {
+        let t = apple_silicon();
+        let mounts = vec![((1 << 24) | 99, "/Volumes/STICK".to_string())];
+        assert!(holders(&t, &mounts, "disk0").is_empty());
     }
 
     #[test]
