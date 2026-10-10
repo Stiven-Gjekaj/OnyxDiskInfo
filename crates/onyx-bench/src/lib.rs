@@ -7,5 +7,6 @@
 #![forbid(unsafe_code)]
 
 mod device;
+pub mod scan;
 
 pub use device::{AlignedBuffer, Device, FileDevice, MemoryDevice};
