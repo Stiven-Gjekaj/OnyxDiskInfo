@@ -1,0 +1,159 @@
+// The parts of the window: a drive tab, a badge, and the attribute table.
+
+import { ListView } from "std-widgets.slint";
+import { Theme, Verdict } from "theme.slint";
+import { AttributeRow } from "data.slint";
+
+// One drive at the top of the window: its verdict and its temperature in a
+// colored box, and its name under it. A click shows the drive.
+export component DriveTabButton inherits Rectangle {
+    in property <string> title;
+    in property <string> temperature;
+    in property <Verdict> verdict;
+    in property <string> verdict-text;
+    in property <bool> selected;
+    callback clicked();
+
+    min-width: 120px;
+    border-radius: Theme.radius;
+    background: selected ? Theme.selection : touch.has-hover ? Theme.surface-alt : transparent;
+    animate background { duration: 150ms; }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+
+    VerticalLayout {
+        padding: Theme.gap-small;
+        spacing: Theme.gap-small;
+        alignment: center;
+        Rectangle {
+            height: 30px;
+            border-radius: 4px;
+            background: Theme.verdict-color(root.verdict);
+            HorizontalLayout {
+                padding-left: Theme.gap;
+                padding-right: Theme.gap;
+                spacing: Theme.gap;
+                Text {
+                    text: root.verdict-text;
+                    color: Theme.verdict-text-color(root.verdict);
+                    font-size: Theme.font-size;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: root.temperature;
+                    color: Theme.verdict-text-color(root.verdict);
+                    font-size: Theme.font-size;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: Theme.small-font-size;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// A large colored box with a label above it, as CrystalDiskInfo shows the
+// health and the temperature.
+export component Badge inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <string> detail;
+    in property <color> fill;
+    in property <color> ink: #ffffff;
+
+    spacing: Theme.gap-small;
+    Text {
+        text: root.label;
+        color: Theme.muted-text;
+        font-size: Theme.small-font-size;
+        horizontal-alignment: center;
+    }
+    Rectangle {
+        min-height: 72px;
+        border-radius: Theme.radius;
+        background: root.fill;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.value;
+                color: root.ink;
+                font-size: Theme.badge-font-size;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+            if root.detail != "": Text {
+                text: root.detail;
+                color: root.ink;
+                font-size: Theme.small-font-size;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}
+
+component Cell inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-size;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+// The widths of the columns of the table, shared by the head and each row.
+global Columns {
+    out property <length> id: 44px;
+    out property <length> number: 72px;
+    out property <length> raw: 150px;
+}
+
+component TableRow inherits Rectangle {
+    in property <AttributeRow> item;
+    in property <bool> head;
+    in property <bool> odd;
+    height: 26px;
+    background: head ? Theme.surface-alt : item.warn ? Theme.warn-row : odd ? Theme.surface-alt.transparentize(0.5) : transparent;
+    HorizontalLayout {
+        padding-left: Theme.gap;
+        padding-right: Theme.gap;
+        spacing: Theme.gap;
+        Cell { width: Columns.id; text: root.item.id; font-weight: root.head ? 700 : 400; }
+        Cell { horizontal-stretch: 1; text: root.item.name; font-weight: root.head ? 700 : 400; }
+        Cell { width: Columns.number; text: root.item.current; horizontal-alignment: right; font-weight: root.head ? 700 : 400; }
+        Cell { width: Columns.number; text: root.item.worst; horizontal-alignment: right; font-weight: root.head ? 700 : 400; }
+        Cell { width: Columns.number; text: root.item.threshold; horizontal-alignment: right; font-weight: root.head ? 700 : 400; }
+        Cell { width: Columns.raw; text: root.item.raw; horizontal-alignment: right; font-weight: root.head ? 700 : 400; }
+    }
+}
+
+// The attribute table: a head, and a row for each attribute.
+export component AttributeTable inherits Rectangle {
+    in property <[AttributeRow]> rows;
+    border-width: 1px;
+    border-color: Theme.border;
+    border-radius: Theme.radius;
+    background: Theme.surface;
+    clip: true;
+    VerticalLayout {
+        TableRow {
+            head: true;
+            item: { id: "ID", name: "Attribute", current: "Current", worst: "Worst", threshold: "Threshold", raw: "Raw", warn: false };
+        }
+        Rectangle { height: 1px; background: Theme.border; }
+        ListView {
+            for row[index] in root.rows: TableRow {
+                item: row;
+                odd: Math.mod(index, 2) == 1;
+            }
+        }
+    }
+}

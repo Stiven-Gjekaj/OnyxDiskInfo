@@ -1,0 +1,45 @@
+// Every color and size of the app. A component takes its colors from here
+// and holds none of its own, so the light and the dark form change this
+// global and nothing else.
+
+import { Palette } from "std-widgets.slint";
+
+export enum Verdict { good, caution, bad, unknown }
+
+export global Theme {
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    // Type.
+    out property <length> font-size: 13px;
+    out property <length> small-font-size: 11px;
+    out property <length> title-font-size: 18px;
+    out property <length> badge-font-size: 22px;
+
+    // Space. One scale of 4px steps.
+    out property <length> gap: 8px;
+    out property <length> gap-small: 4px;
+    out property <length> gap-large: 16px;
+    out property <length> radius: 6px;
+
+    // Surfaces.
+    out property <color> background: dark ? #121216 : #f4f4f5;
+    out property <color> surface: dark ? #1c1c22 : #ffffff;
+    out property <color> surface-alt: dark ? #23232b : #f0f0f2;
+    out property <color> border: dark ? #34343e : #d4d4d8;
+    out property <color> text: dark ? #ececf1 : #18181b;
+    out property <color> muted-text: dark ? #9898a6 : #63636e;
+    out property <color> selection: dark ? #2d2d38 : #e4e4e7;
+
+    // The colors of the verdicts, as CrystalDiskInfo uses them: blue for
+    // good, yellow for caution, red for bad, and gray for none.
+    public pure function verdict-color(v: Verdict) -> color {
+        v == Verdict.good ? (dark ? #2f6fdc : #3b82f6)
+        : v == Verdict.caution ? (dark ? #c9a227 : #eab308)
+        : v == Verdict.bad ? (dark ? #d0393a : #ef4444)
+        : (dark ? #4a4a55 : #a1a1aa)
+    }
+    public pure function verdict-text-color(v: Verdict) -> color {
+        v == Verdict.caution ? #1c1917 : #ffffff
+    }
+    out property <color> warn-row: dark ? #3a2f12 : #fef3c7;
+}

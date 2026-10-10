@@ -1,0 +1,50 @@
+// The values that the host gives the window, and the actions that the
+// window gives back. The window decides nothing.
+
+import { Verdict } from "theme.slint";
+
+export struct DriveTab {
+    title: string,
+    temperature: string,
+    verdict: Verdict,
+    verdict-text: string,
+}
+
+export struct InfoRow {
+    label: string,
+    value: string,
+}
+
+export struct AttributeRow {
+    id: string,
+    name: string,
+    current: string,
+    worst: string,
+    threshold: string,
+    raw: string,
+    warn: bool,
+}
+
+export global AppData {
+    in property <[DriveTab]> tabs;
+    in-out property <int> current;
+    in property <string> name;
+    in property <Verdict> verdict: Verdict.unknown;
+    in property <string> verdict-text;
+    in property <string> confidence;
+    in property <string> source;
+    in property <string> temperature;
+    in property <Verdict> temperature-verdict: Verdict.unknown;
+    in property <[InfoRow]> info;
+    in property <[string]> reasons;
+    in property <[AttributeRow]> rows;
+    in property <string> message;
+    in property <bool> needs-rights;
+    in property <bool> busy;
+}
+
+export global Logic {
+    callback select(int);
+    callback refresh();
+    callback read-with-rights();
+}

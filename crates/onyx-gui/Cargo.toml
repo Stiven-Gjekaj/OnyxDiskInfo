@@ -19,6 +19,10 @@ onyx.workspace = true
 onyx-core.workspace = true
 onyx-probe.workspace = true
 serde_json.workspace = true
+slint.workspace = true
+
+[build-dependencies]
+slint-build.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,131 @@
+// The window of OnyxDiskInfo. It shows one drive at a time, in the layout of
+// CrystalDiskInfo: the drives at the top, the health and the temperature on
+// the left, the details on the right, and the attributes under them.
+
+import { Button, ScrollView } from "std-widgets.slint";
+import { Theme, Verdict } from "theme.slint";
+import { AppData, Logic, DriveTab, InfoRow, AttributeRow } from "data.slint";
+import { DriveTabButton, Badge, AttributeTable } from "widgets.slint";
+
+export { AppData, Logic, DriveTab, InfoRow, AttributeRow, Verdict }
+
+export component MainWindow inherits Window {
+    title: "OnyxDiskInfo";
+    icon: @image-url("../../../assets/logo.svg");
+    preferred-width: 880px;
+    preferred-height: 660px;
+    min-width: 640px;
+    min-height: 480px;
+    background: Theme.background;
+    default-font-size: Theme.font-size;
+
+    VerticalLayout {
+        padding: Theme.gap-large;
+        spacing: Theme.gap;
+
+        // The drives.
+        HorizontalLayout {
+            spacing: Theme.gap-small;
+            for tab[index] in AppData.tabs: DriveTabButton {
+                title: tab.title;
+                temperature: tab.temperature;
+                verdict: tab.verdict;
+                verdict-text: tab.verdict-text;
+                selected: index == AppData.current;
+                clicked => { Logic.select(index); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            VerticalLayout {
+                alignment: center;
+                Button {
+                    text: AppData.busy ? "Reading" : "Refresh";
+                    enabled: !AppData.busy;
+                    clicked => { Logic.refresh(); }
+                }
+            }
+        }
+
+        Rectangle { height: 1px; background: Theme.border; }
+
+        Text {
+            text: AppData.name;
+            color: Theme.text;
+            font-size: Theme.title-font-size;
+            font-weight: 700;
+            overflow: elide;
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap-large;
+            vertical-stretch: 0;
+
+            VerticalLayout {
+                width: 170px;
+                spacing: Theme.gap;
+                Badge {
+                    label: "Health Status";
+                    value: AppData.verdict-text;
+                    detail: AppData.confidence == "-" ? "" : "Confidence: " + AppData.confidence;
+                    fill: Theme.verdict-color(AppData.verdict);
+                    ink: Theme.verdict-text-color(AppData.verdict);
+                }
+                Badge {
+                    label: "Temperature";
+                    value: AppData.temperature;
+                    detail: "";
+                    fill: Theme.verdict-color(AppData.temperature-verdict);
+                    ink: Theme.verdict-text-color(AppData.temperature-verdict);
+                }
+            }
+
+            VerticalLayout {
+                spacing: Theme.gap-small;
+                horizontal-stretch: 1;
+                for row in AppData.info: HorizontalLayout {
+                    spacing: Theme.gap;
+                    Text {
+                        width: 130px;
+                        text: row.label;
+                        color: Theme.muted-text;
+                        horizontal-alignment: right;
+                    }
+                    Text {
+                        text: row.value;
+                        color: Theme.text;
+                        overflow: elide;
+                    }
+                }
+                Text {
+                    text: AppData.source == "-" ? "" : "Source: " + AppData.source;
+                    color: Theme.muted-text;
+                    font-size: Theme.small-font-size;
+                }
+                for reason in AppData.reasons: Text {
+                    text: "- " + reason;
+                    color: Theme.text;
+                    wrap: word-wrap;
+                }
+                if AppData.message != "": HorizontalLayout {
+                    spacing: Theme.gap;
+                    Text {
+                        text: AppData.message;
+                        color: Theme.muted-text;
+                        wrap: word-wrap;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    if AppData.needs-rights: Button {
+                        text: "Read as administrator";
+                        clicked => { Logic.read-with-rights(); }
+                    }
+                }
+            }
+        }
+
+        AttributeTable {
+            vertical-stretch: 1;
+            min-height: 160px;
+            rows: AppData.rows;
+        }
+    }
+}
