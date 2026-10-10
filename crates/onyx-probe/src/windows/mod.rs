@@ -5,3 +5,5 @@ pub mod host;
 pub mod parse;
 pub mod passthru;
 pub mod raw;
+#[cfg(windows)]
+pub mod smart;

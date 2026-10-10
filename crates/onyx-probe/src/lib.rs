@@ -66,7 +66,17 @@ pub fn read_health(drive: &DriveInfo) -> Result<RawHealth> {
             reason: "the drive refused ATA PASS-THROUGH".to_string(),
         })
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    #[cfg(windows)]
+    {
+        if drive.bus == onyx_core::Bus::Nvme {
+            return windows::smart::nvme_health(&drive.node);
+        }
+        windows::smart::ata_health(&drive.node)?.ok_or_else(|| Error::NoHealthData {
+            name: drive.name.clone(),
+            reason: "the drive or its driver refused ATA PASS-THROUGH".to_string(),
+        })
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
     {
         let _ = drive;
         Err(Error::Unsupported {
