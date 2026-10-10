@@ -8,7 +8,7 @@ use std::cell::RefCell;
 
 use onyx_core::{DriveInfo, in_list_order};
 use serde_json::Value;
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel, Weak};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel, Weak};
 
 use crate::view::{self, DriveView};
 use crate::{AppData, AttributeRow, DriveTab, InfoRow, Logic, MainWindow};
@@ -17,6 +17,11 @@ thread_local! {
     /// The view of each drive, in the order of `onyx list`. Only the thread
     /// of the window touches it.
     static VIEWS: RefCell<Vec<DriveView>> = const { RefCell::new(Vec::new()) };
+
+    /// The tabs. The window keeps one model and its rows change in place, so
+    /// a tab that a person or a screen reader holds stays the same tab while
+    /// the health of each drive arrives.
+    static TABS: std::rc::Rc<VecModel<DriveTab>> = std::rc::Rc::new(VecModel::default());
 }
 
 fn verdict(v: view::Verdict) -> crate::Verdict {
@@ -36,8 +41,8 @@ fn model<T: Clone + 'static>(items: Vec<T>) -> ModelRc<T> {
 fn show(ui: &MainWindow) {
     let data = ui.global::<AppData<'_>>();
     VIEWS.with_borrow(|views| {
-        data.set_tabs(model(
-            views
+        TABS.with(|tabs| {
+            let wanted: Vec<DriveTab> = views
                 .iter()
                 .map(|v| DriveTab {
                     title: v.name.clone().into(),
@@ -45,8 +50,18 @@ fn show(ui: &MainWindow) {
                     verdict: verdict(v.verdict),
                     verdict_text: v.verdict_text.clone().into(),
                 })
-                .collect(),
-        ));
+                .collect();
+            if tabs.row_count() == wanted.len() {
+                for (index, tab) in wanted.into_iter().enumerate() {
+                    if tabs.row_data(index).as_ref() != Some(&tab) {
+                        tabs.set_row_data(index, tab);
+                    }
+                }
+            } else {
+                tabs.set_vec(wanted);
+            }
+            data.set_tabs(ModelRc::from(tabs.clone()));
+        });
         let current = usize::try_from(data.get_current()).unwrap_or(0);
         let Some(v) = views.get(current).or(views.first()) else {
             data.set_name("No drive found".into());
