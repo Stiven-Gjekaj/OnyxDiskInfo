@@ -167,6 +167,55 @@ pub fn ata_answer(answer: &[u8]) -> Option<Vec<u8>> {
         .map(<[u8]>::to_vec)
 }
 
+/// `IOCTL_SCSI_PASS_THROUGH`.
+pub const IOCTL_SCSI_PASS_THROUGH: u32 = 0x0004_D004;
+
+/// The size of `SCSI_PASS_THROUGH` on a 64-bit host. `DataBufferOffset` is a
+/// `ULONG_PTR` at byte 24, and the structure ends after the 16 bytes of the
+/// command at byte 52, padded to 56.
+const SCSI_HEADER_BYTES: usize = 56;
+
+/// Room for the sense data that the device gives back.
+const SENSE_BYTES: usize = 32;
+
+/// Where the data starts: after the header and the sense data.
+const SCSI_DATA_AT: usize = SCSI_HEADER_BYTES + SENSE_BYTES;
+
+/// `SCSI_IOCTL_DATA_IN`.
+const SCSI_DATA_IN: u8 = 1;
+
+/// The buffer for one SCSI command that reads 512 bytes: `SCSI_PASS_THROUGH`,
+/// the sense data, then the data.
+///
+/// This carries ATA PASS-THROUGH to a drive behind a USB bridge, because the
+/// ATA control code reaches no drive on the USB storage driver.
+pub fn scsi_buffer(cdb: [u8; 16]) -> Vec<u8> {
+    let mut out = vec![0u8; SCSI_DATA_AT + ATA_DATA_BYTES];
+    out[0..2].copy_from_slice(&(SCSI_HEADER_BYTES as u16).to_le_bytes());
+    out[6] = cdb.len() as u8;
+    out[7] = SENSE_BYTES as u8;
+    out[8] = SCSI_DATA_IN;
+    out[12..16].copy_from_slice(&(ATA_DATA_BYTES as u32).to_le_bytes());
+    out[16..20].copy_from_slice(&ATA_TIMEOUT_SECONDS.to_le_bytes());
+    out[24..32].copy_from_slice(&(SCSI_DATA_AT as u64).to_le_bytes());
+    out[32..36].copy_from_slice(&(SCSI_HEADER_BYTES as u32).to_le_bytes());
+    out[36..52].copy_from_slice(&cdb);
+    out
+}
+
+/// The data of a SCSI answer, when the device gave a good status.
+///
+/// A status of CHECK CONDITION means the bridge or the drive refused the
+/// command.
+pub fn scsi_answer(answer: &[u8]) -> Option<Vec<u8>> {
+    if *answer.get(2)? != 0 {
+        return None;
+    }
+    answer
+        .get(SCSI_DATA_AT..SCSI_DATA_AT + ATA_DATA_BYTES)
+        .map(<[u8]>::to_vec)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,6 +282,29 @@ mod tests {
         assert_eq!(&b[8..12], &512u32.to_le_bytes());
         assert_eq!(&b[24..32], &48u64.to_le_bytes());
         assert_eq!(&b[40..47], &[0xd0, 1, 0, 0x4f, 0xc2, 0, 0xb0]);
+    }
+
+    #[test]
+    fn the_scsi_header_carries_the_command_and_points_past_the_sense_data() {
+        let cdb = crate::sat::ata_pass_through_16(ATA_IDENTIFY);
+        let b = scsi_buffer(cdb);
+        assert_eq!(b.len(), 56 + 32 + 512);
+        assert_eq!(&b[0..2], &56u16.to_le_bytes());
+        assert_eq!((b[6], b[7], b[8]), (16, 32, 1));
+        assert_eq!(&b[12..16], &512u32.to_le_bytes());
+        assert_eq!(&b[24..32], &88u64.to_le_bytes());
+        assert_eq!(&b[32..36], &56u32.to_le_bytes());
+        assert_eq!(&b[36..52], &cdb);
+    }
+
+    #[test]
+    fn a_scsi_answer_with_a_bad_status_gives_no_data() {
+        let mut b = scsi_buffer([0; 16]);
+        b[88] = 0x42;
+        assert_eq!(scsi_answer(&b).unwrap()[0], 0x42);
+        b[2] = 0x02; // CHECK CONDITION
+        assert!(scsi_answer(&b).is_none());
+        assert!(scsi_answer(&[]).is_none());
     }
 
     #[test]

@@ -124,17 +124,37 @@ fn ata_command(handle: &Handle, node: &str, command: AtaCommand) -> Result<Optio
     }
 }
 
+/// Send one ATA command inside ATA PASS-THROUGH, through the SCSI control
+/// code. `Ok(None)` means the bridge or the drive refused it.
+fn sat_command(handle: &Handle, node: &str, command: AtaCommand) -> Result<Option<Vec<u8>>> {
+    let mut buffer = passthru::scsi_buffer(crate::sat::ata_pass_through_16(command));
+    match control(handle, passthru::IOCTL_SCSI_PASS_THROUGH, &mut buffer) {
+        Ok(()) => Ok(passthru::scsi_answer(&buffer)),
+        Err(e) if e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) => Err(refused(e, node)),
+        Err(_) => Ok(None),
+    }
+}
+
 /// Read the identify data, the SMART data, and the thresholds of an ATA
 /// drive. `Ok(None)` means the drive or its driver refused the commands.
+///
+/// The ATA control code comes first, because it reaches a drive on a SATA
+/// port. A drive behind a USB bridge does not answer it, so SAT through the
+/// SCSI control code comes second.
 pub fn ata_health(node: &str) -> Result<Option<RawHealth>> {
     let handle = open(node)?;
-    let Some(identify) = ata_command(&handle, node, ATA_IDENTIFY)? else {
+    type Send = fn(&Handle, &str, AtaCommand) -> Result<Option<Vec<u8>>>;
+    let (send, identify): (Send, Vec<u8>) = match ata_command(&handle, node, ATA_IDENTIFY)? {
+        Some(identify) => (ata_command, identify),
+        None => match sat_command(&handle, node, ATA_IDENTIFY)? {
+            Some(identify) => (sat_command, identify),
+            None => return Ok(None),
+        },
+    };
+    let Some(smart) = send(&handle, node, ATA_SMART_READ_DATA)? else {
         return Ok(None);
     };
-    let Some(smart) = ata_command(&handle, node, ATA_SMART_READ_DATA)? else {
-        return Ok(None);
-    };
-    let thresholds = ata_command(&handle, node, ATA_SMART_READ_THRESHOLDS)?;
+    let thresholds = send(&handle, node, ATA_SMART_READ_THRESHOLDS)?;
     Ok(Some(RawHealth::Ata {
         identify,
         smart,
