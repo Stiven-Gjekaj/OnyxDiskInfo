@@ -17,6 +17,7 @@ onyx-core.workspace = true
 # every host compiles.
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "=0.10.1"
+core-foundation-sys = "=0.8.7"
 io-kit-sys = "=0.4.1"
 
 [target.'cfg(windows)'.dependencies]
