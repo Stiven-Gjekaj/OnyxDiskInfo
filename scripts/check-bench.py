@@ -6,10 +6,15 @@ person can run it wherever fio is:
     python3 scripts/check-bench.py target/release/onyx <directory>
 
 Each tool gets its own test file of 1 GiB in the directory, and each one
-deletes it. fio runs each job of CrystalDiskMark with the same model that
-Onyx uses: `queue` threads, each with one blocking command in flight, and no
-cache of the host. The script passes when each speed of Onyx is within 10
+deletes it. fio runs each job as CrystalDiskMark defines it: one thread with
+`queue` commands in flight, through the asynchronous engine of the host, and
+no cache of the host. Onyx keeps the same number of commands in flight with
+one thread for each. The script passes when each speed of Onyx is within 10
 percent of the speed of fio.
+
+The first version of this script gave fio `queue` threads of its own. Each
+fio thread then read or wrote its own sequential stream, and Onyx shares one
+stream between its threads, so the two did not run the same job.
 
 The two tools run one after the other on a drive that other programs use as
 well, so two runs of the same tool also differ. The script prints each pair,
@@ -18,6 +23,7 @@ so a person sees how far apart they are.
 
 import json
 import os
+import platform
 import subprocess
 import sys
 
@@ -34,12 +40,17 @@ JOBS = [
 ]
 
 
-def fio(path, rw, bs, jobs):
+# The asynchronous engine of each host, which keeps a queue of commands in
+# flight from one thread.
+ENGINE = {"Linux": "libaio", "Darwin": "posixaio", "Windows": "windowsaio"}
+
+
+def fio(path, rw, bs, queue):
     command = [
         "fio", "--name=onyx", f"--filename={path}", f"--size={SIZE}",
-        f"--rw={rw}", f"--bs={bs}", f"--numjobs={jobs}", "--group_reporting",
-        "--ioengine=psync", "--direct=1", f"--runtime={SECONDS}", "--time_based",
-        "--output-format=json",
+        f"--rw={rw}", f"--bs={bs}", "--numjobs=1", f"--iodepth={queue}",
+        f"--ioengine={ENGINE[platform.system()]}", "--direct=1",
+        f"--runtime={SECONDS}", "--time_based", "--output-format=json",
     ]
     out = json.loads(subprocess.run(command, check=True, capture_output=True, text=True).stdout)
     job = out["jobs"][0]
@@ -56,9 +67,9 @@ def main():
 
     theirs = {}
     try:
-        for name, read, write, bs, jobs in JOBS:
-            theirs[(name, False)] = fio(fio_file, read, bs, jobs)
-            theirs[(name, True)] = fio(fio_file, write, bs, jobs)
+        for name, read, write, bs, queue in JOBS:
+            theirs[(name, False)] = fio(fio_file, read, bs, queue)
+            theirs[(name, True)] = fio(fio_file, write, bs, queue)
     finally:
         if os.path.exists(fio_file):
             os.remove(fio_file)
