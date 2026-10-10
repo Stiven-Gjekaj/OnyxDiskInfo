@@ -73,6 +73,32 @@ jobs:
         if: runner.os == 'Windows'
         run: python scripts/check-list.py target/debug/onyx.exe
 
+      # The exit test of P2. smartctl reads the same drives, and the script
+      # compares the two. Linux needs root for the pass-through of both
+      # tools. The Windows runner is an Administrator already, and macOS reads
+      # NVMe health data with no privilege.
+      - name: install smartmontools on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y smartmontools
+      - name: install smartmontools on macOS
+        if: runner.os == 'macOS'
+        run: brew install smartmontools
+      - name: install smartmontools on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install smartmontools -y --no-progress
+          "C:\Program Files\smartmontools\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: compare the health with smartctl on Linux
+        if: runner.os == 'Linux'
+        run: sudo python3 scripts/check-health.py target/debug/onyx
+      - name: compare the health with smartctl on macOS
+        if: runner.os == 'macOS'
+        run: python3 scripts/check-health.py target/debug/onyx
+      - name: compare the health with smartctl on Windows
+        if: runner.os == 'Windows'
+        run: python scripts/check-health.py target/debug/onyx.exe
+
   # A shim that belongs to one host is compiled only on that host, so a break
   # in it waits for that job. `cargo clippy` does not link, so this catches
   # the break from Linux in about a minute.
