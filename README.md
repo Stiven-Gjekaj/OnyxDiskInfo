@@ -18,6 +18,7 @@ _One tool, the same on Windows, on macOS, and on Linux._
 
 <p align="center">
   <a href="#overview"><b>Overview</b></a> |
+  <a href="#screenshots"><b>Screenshots</b></a> |
   <a href="#what-it-does"><b>Features</b></a> |
   <a href="#disks-without-smart"><b>Without SMART</b></a> |
   <a href="#the-shape-of-the-command"><b>Commands</b></a> |
@@ -29,14 +30,15 @@ _One tool, the same on Windows, on macOS, and on Linux._
 ---
 
 > [!NOTE]
-> **`onyx list` and `onyx health` work.**
+> **The command line and the desktop app work.**
 > `onyx list` shows each drive on Windows, on macOS, and on Linux.
 > `onyx health` reads an NVMe drive on all three hosts, and agrees with
 > smartctl. A drive that reports nothing gets a measured record with a low
 > confidence. The SATA and USB bridge paths are written and wait for a drive
 > to test them.
-> `onyx scan`, `onyx bench`, and `onyx test` work. The benchmarks agree with
-> fio within 10 percent, and the capacity test finds a fake drive.
+> `onyx scan`, `onyx bench`, and `onyx test` work. The capacity test finds a
+> fake drive. The comparison of the benchmarks with fio is partly proven.
+> The desktop app shows the same values as `onyx health` on all three hosts.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
 > behind it.
@@ -51,6 +53,16 @@ It has two faces that share one library:
 
 - `onyx`, a command line that gives each result as text or as JSON.
 - `OnyxDiskInfo`, a desktop app in the style of CrystalDiskInfo.
+
+## Screenshots
+
+The desktop app on the internal SSD of a MacBook Air. It follows the light or
+the dark scheme of the system. The serial number is masked.
+
+<p align="center">
+  <img src="assets/screenshots/onyx-light.png" alt="OnyxDiskInfo in the light scheme" width="49%">
+  <img src="assets/screenshots/onyx-dark.png" alt="OnyxDiskInfo in the dark scheme" width="49%">
+</p>
 
 ## What it does
 
