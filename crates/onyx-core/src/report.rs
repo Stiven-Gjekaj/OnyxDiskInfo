@@ -5,6 +5,7 @@
 
 use crate::Result;
 use crate::ata::{self, Identity, Smart};
+use crate::emmc::{self, Life};
 use crate::health::{self, Assessment};
 use crate::nvme::{self, Controller, HealthLog};
 
@@ -22,6 +23,9 @@ pub enum Report {
     Ata {
         identity: Identity,
         smart: Smart,
+    },
+    Emmc {
+        life: Life,
     },
 }
 
@@ -43,11 +47,19 @@ impl Report {
         })
     }
 
+    /// Decode the two `sysfs` files of an eMMC chip.
+    pub fn emmc(life_time: Option<&str>, pre_eol_info: Option<&str>) -> Result<Report> {
+        Ok(Report::Emmc {
+            life: emmc::from_sysfs(life_time, pre_eol_info)?,
+        })
+    }
+
     /// The name of the protocol that carried the data.
     pub fn protocol(&self) -> &'static str {
         match self {
             Report::Nvme { .. } => "NVMe",
             Report::Ata { .. } => "ATA",
+            Report::Emmc { .. } => "eMMC",
         }
     }
 
@@ -56,6 +68,7 @@ impl Report {
         match self {
             Report::Nvme { log, .. } => health::nvme(log),
             Report::Ata { smart, .. } => health::ata(smart),
+            Report::Emmc { life } => health::emmc(life),
         }
     }
 
@@ -64,6 +77,7 @@ impl Report {
         match self {
             Report::Nvme { log, .. } => log.temperature_celsius(),
             Report::Ata { smart, .. } => smart.temperature_celsius(),
+            Report::Emmc { .. } => None,
         }
     }
 
@@ -74,6 +88,7 @@ impl Report {
             Report::Ata { smart, .. } => smart
                 .attribute(ata::POWER_ON_HOURS)
                 .map(|a| u128::from(a.value())),
+            Report::Emmc { .. } => None,
         }
     }
 
@@ -84,6 +99,7 @@ impl Report {
             Report::Ata { smart, .. } => smart
                 .attribute(ata::POWER_CYCLES)
                 .map(|a| u128::from(a.raw48())),
+            Report::Emmc { .. } => None,
         }
     }
 
@@ -100,6 +116,9 @@ impl Report {
                 i.serial.as_deref(),
                 i.firmware.as_deref(),
             ),
+            // The chip gives its names in `sysfs`, and the drive list holds
+            // them already.
+            Report::Emmc { .. } => (None, None, None),
         }
     }
 }
@@ -140,6 +159,16 @@ mod tests {
         assert_eq!(r.power_on_hours(), Some(21_544));
         assert_eq!(r.power_cycles(), Some(1_212));
         assert_eq!(r.identity().0, Some("Samsung SSD 860 EVO 1TB"));
+    }
+
+    #[test]
+    fn an_emmc_report_gives_its_verdict_and_no_counters() {
+        let r = Report::emmc(Some("0x0a 0x01"), Some("0x01")).unwrap();
+        assert_eq!(r.protocol(), "eMMC");
+        assert_eq!(r.assessment().verdict, Verdict::Caution);
+        assert_eq!(r.temperature_celsius(), None);
+        assert_eq!(r.power_on_hours(), None);
+        assert_eq!(r.identity(), (None, None, None));
     }
 
     #[test]
