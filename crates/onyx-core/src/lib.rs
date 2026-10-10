@@ -8,6 +8,7 @@
 pub mod ata;
 mod drive;
 mod error;
+pub mod health;
 mod listing;
 pub mod nvme;
 mod size;
