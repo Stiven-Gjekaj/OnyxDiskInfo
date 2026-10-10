@@ -62,6 +62,11 @@ pub enum Error {
     },
     /// The person did not type the phrase that confirms the drive.
     NotConfirmed,
+    /// A script ran a test that writes, and gave no phrase.
+    NeedsConfirmation {
+        /// The phrase that `--confirm` takes.
+        phrase: String,
+    },
     /// A file system holds a part of the drive.
     Mounted {
         /// The drive, as the list names it.
@@ -118,6 +123,10 @@ impl fmt::Display for Error {
                 "the drive changed: you asked for {wanted}, and {found} is there now. Run `onyx list` again"
             ),
             Error::NotConfirmed => write!(f, "the phrase did not match, so nothing was written"),
+            Error::NeedsConfirmation { phrase } => write!(
+                f,
+                "this test writes to the drive, and no terminal can ask for the phrase. Add --confirm \"{phrase}\""
+            ),
             Error::Mounted { name, by } => write!(
                 f,
                 "{name} is in use: {by}. Eject or unmount it, and try again"
@@ -180,6 +189,18 @@ mod tests {
             what: "/dev/sda".to_string(),
         };
         assert!(e.to_string().contains("sudo"), "{e}");
+    }
+
+    #[test]
+    fn a_script_with_no_phrase_learns_the_phrase() {
+        let e = Error::NeedsConfirmation {
+            phrase: "ProductCode 125829120000".to_string(),
+        };
+        assert!(
+            e.to_string()
+                .ends_with("Add --confirm \"ProductCode 125829120000\""),
+            "{e}"
+        );
     }
 
     #[test]
