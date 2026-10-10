@@ -4,7 +4,8 @@
 //! the decoders in `onyx-core` and their tests stay the only place that
 //! reads a field.
 
-use onyx_core::{Report, Result};
+use onyx_core::health::Source;
+use onyx_core::{Bus, DriveInfo, Report, Result};
 
 /// The raw answers of one drive.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,9 +45,54 @@ impl RawHealth {
     }
 }
 
+/// The source of the answers of a drive.
+///
+/// An ATA answer from a drive on USB came through a bridge that translated
+/// the command. Every other answer came from the drive itself.
+pub fn source_of(drive: &DriveInfo, raw: &RawHealth) -> Source {
+    match raw {
+        RawHealth::Ata { .. } if drive.bus == Bus::Usb => Source::Bridge,
+        _ => Source::Drive,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use onyx_core::DriveId;
+
+    fn drive(bus: Bus) -> DriveInfo {
+        let mut d = DriveInfo::new(DriveId::new("sdb"), "/dev/sdb", "a drive");
+        d.bus = bus;
+        d
+    }
+
+    fn ata() -> RawHealth {
+        RawHealth::Ata {
+            identify: vec![0; 512],
+            smart: vec![0; 512],
+            thresholds: None,
+        }
+    }
+
+    #[test]
+    fn an_ata_answer_over_usb_came_through_a_bridge() {
+        assert_eq!(source_of(&drive(Bus::Usb), &ata()), Source::Bridge);
+    }
+
+    #[test]
+    fn an_ata_answer_on_sata_came_from_the_drive() {
+        assert_eq!(source_of(&drive(Bus::Sata), &ata()), Source::Drive);
+    }
+
+    #[test]
+    fn an_nvme_answer_came_from_the_drive() {
+        let raw = RawHealth::Nvme {
+            identify: vec![],
+            log: vec![],
+        };
+        assert_eq!(source_of(&drive(Bus::Nvme), &raw), Source::Drive);
+    }
 
     #[test]
     fn answers_that_are_too_short_give_an_error_and_not_a_panic() {
