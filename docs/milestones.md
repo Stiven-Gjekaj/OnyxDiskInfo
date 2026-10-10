@@ -94,14 +94,33 @@ It tries them in this order:
 5. Onyx measures the disk itself.
 
 A disk with no health data still gets a record.
-The record holds surface scan errors, read latency over time, the fake
-capacity result, and the benchmark trend.
+Today the record is a sample of 64 reads of 1 MiB, spread from the start to
+the end of the drive, each one timed.
+A failed read is a bad verdict, and a read of a second or more is a caution.
+P4 adds the surface scan, the fake capacity result, and the benchmark trend.
 
 Each health result has a confidence level.
 The app shows it.
 Reason: a value that Onyx calculates from its own tests is not a value that
 the disk reports.
 The two must not look the same.
+
+**The vendor commands of USB bridges wait for hardware.**
+Most external SSDs today are NVMe drives behind a JMicron JMS583, an ASMedia
+ASM2362, or a Realtek RTL9210.
+Each of these takes its own SCSI command, and the layouts are not public
+standards.
+Onyx sends no vendor command that nobody has tested on the chip it is for,
+because a wrong command to an unknown chip can hang the drive.
+Until a bridge of each kind is at hand, `smartctl` reads them, and the record
+says so with a medium confidence.
+This decision was made on 2026-10-10.
+
+**The SD card health register is not a standard.**
+SD cards have no health data in the SD standard.
+Some industrial cards give it through a vendor command, CMD56, with a layout
+that each maker defines.
+Onyx measures an SD card instead.
 
 **`smartctl` is a fallback, not the core.**
 Onyx runs it as a separate program and reads its JSON.
