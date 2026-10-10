@@ -43,6 +43,8 @@ pub struct DriveView {
     pub confidence: String,
     pub source: String,
     pub temperature: String,
+    /// The color of the temperature badge.
+    pub temperature_verdict: Verdict,
     /// Label and value pairs for the grid beside the badges.
     pub info: Vec<(String, String)>,
     pub reasons: Vec<String>,
@@ -105,12 +107,26 @@ pub fn listed(drive: &Value) -> DriveView {
         confidence: "-".to_string(),
         source: "-".to_string(),
         temperature: "-- C".to_string(),
+        temperature_verdict: Verdict::Unknown,
         info,
         reasons: Vec::new(),
         columns: ["ID", "Attribute", "Current", "Worst", "Threshold", "Raw"].map(str::to_string),
         rows: Vec::new(),
         message: String::new(),
         needs_rights: false,
+    }
+}
+
+/// The color of a temperature, as CrystalDiskInfo colors it: good below
+/// 50 C, caution from 50 C, and bad from 60 C. A drive can run hotter than
+/// this within its rating, so the color is a hint and not a verdict on the
+/// drive.
+pub fn temperature_verdict(celsius: Option<i64>) -> Verdict {
+    match celsius {
+        None => Verdict::Unknown,
+        Some(t) if t >= 60 => Verdict::Bad,
+        Some(t) if t >= 50 => Verdict::Caution,
+        Some(_) => Verdict::Good,
     }
 }
 
@@ -223,10 +239,9 @@ pub fn with_health(mut view: DriveView, health: &Value) -> DriveView {
         Some("measured") => "measured by Onyx".to_string(),
         other => or_dash(other.map(str::to_string)),
     };
-    view.temperature = health
-        .get("temperature_celsius")
-        .and_then(Value::as_i64)
-        .map_or("-- C".to_string(), |t| format!("{t} C"));
+    let celsius = health.get("temperature_celsius").and_then(Value::as_i64);
+    view.temperature = celsius.map_or("-- C".to_string(), |t| format!("{t} C"));
+    view.temperature_verdict = temperature_verdict(celsius);
     view.reasons = assessment
         .get("reasons")
         .and_then(Value::as_array)
@@ -276,6 +291,20 @@ pub fn with_health(mut view: DriveView, health: &Value) -> DriveView {
     view.message.clear();
     view.needs_rights = false;
     view
+}
+
+/// The message that the window shows for an error of the command line.
+///
+/// The command line tells a person at a terminal to use sudo. In the window,
+/// the button does that.
+pub fn error_message(error: &onyx_core::Error) -> (String, bool) {
+    match error {
+        onyx_core::Error::NeedsPrivilege { .. } => (
+            "Onyx needs administrator rights to read this drive.".to_string(),
+            true,
+        ),
+        other => (other.to_string(), false),
+    }
 }
 
 /// Mark a view with an error in place of its health.
@@ -390,6 +419,32 @@ mod tests {
         assert_eq!(v.rows[0].raw, "64");
         assert_eq!(v.rows[2].raw, "21.3 MB/s");
         assert_eq!(v.rows[3].raw, "50 ms");
+    }
+
+    #[test]
+    fn the_temperature_takes_the_colors_of_crystaldiskinfo() {
+        assert_eq!(temperature_verdict(None), Verdict::Unknown);
+        assert_eq!(temperature_verdict(Some(49)), Verdict::Good);
+        assert_eq!(temperature_verdict(Some(50)), Verdict::Caution);
+        assert_eq!(temperature_verdict(Some(59)), Verdict::Caution);
+        assert_eq!(temperature_verdict(Some(60)), Verdict::Bad);
+        let v = with_health(listed(&apple()), &apple_health());
+        assert_eq!(v.temperature_verdict, Verdict::Good);
+    }
+
+    #[test]
+    fn missing_rights_get_the_words_of_the_window_and_the_button() {
+        let (text, button) = error_message(&onyx_core::Error::NeedsPrivilege {
+            what: "/dev/rdisk4".to_string(),
+        });
+        assert!(button);
+        assert!(!text.contains("sudo"), "{text}");
+        let (text, button) = error_message(&onyx_core::Error::NoHealthData {
+            name: "Stick".to_string(),
+            reason: "none".to_string(),
+        });
+        assert!(!button);
+        assert_eq!(text, "Stick gives no health data: none");
     }
 
     #[test]
