@@ -73,10 +73,11 @@ jobs:
         if: runner.os == 'Windows'
         run: python scripts/check-list.py target/debug/onyx.exe
 
-      # The exit test of P2. smartctl reads the same drives, and the script
-      # compares the two. Linux needs root for the pass-through of both
-      # tools. The Windows runner is an Administrator already, and macOS reads
-      # NVMe health data with no privilege.
+      # The exit test of P2 and P3. smartctl reads the same drives, and the
+      # script compares the two. A drive that reports no health gets a
+      # measured record. Linux needs root for the pass-through of both tools,
+      # and every host needs it to read a sample of a raw drive. The Windows
+      # runner is an Administrator already.
       - name: install smartmontools on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y smartmontools
@@ -92,9 +93,11 @@ jobs:
       - name: compare the health with smartctl on Linux
         if: runner.os == 'Linux'
         run: sudo python3 scripts/check-health.py target/debug/onyx
+      # sudo, so that Onyx can read a sample of a drive that reports no
+      # health. The runner has only such drives.
       - name: compare the health with smartctl on macOS
         if: runner.os == 'macOS'
-        run: python3 scripts/check-health.py target/debug/onyx
+        run: sudo python3 scripts/check-health.py target/debug/onyx
       - name: compare the health with smartctl on Windows
         if: runner.os == 'Windows'
         run: python scripts/check-health.py target/debug/onyx.exe
