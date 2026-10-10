@@ -21,11 +21,16 @@ The toolchain is Rust, and it needs nothing else.
     sudo python3 scripts/check-health.py target/debug/onyx
     sudo scripts/check-capacity.sh target/debug/onyx
     python3 scripts/check-bench.py target/release/onyx /tmp
+    SLINT_EMIT_DEBUG_INFO=1 cargo build -p onyx-gui -p onyx --features slint/mcp
+    python3 scripts/check-gui.py target/debug/OnyxDiskInfo target/debug/onyx --headless
 
-Those eight are the gate, and they run on Windows, on macOS and on Linux.
+Those ten are the gate, and they run on Windows, on macOS and on Linux.
 `check-health.py` needs smartctl, and root on Linux.
 `check-capacity.sh` and `check-bench.py` run on Linux, and they need the
-device mapper and fio.
+device mapper and fio. CI reports `check-bench.py` and does not fail on it,
+because the disk of a cloud runner changes its speed from minute to minute.
+`check-gui.py` needs the app built with the MCP feature of Slint, and on
+Linux the packages `libfontconfig-dev` and `libxkbcommon-dev`.
 The [README](README.md) says what is built so far.
 
 ## Ways to contribute
