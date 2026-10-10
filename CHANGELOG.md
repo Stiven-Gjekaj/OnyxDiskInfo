@@ -17,3 +17,11 @@ Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
   reasons, the temperature, the hours, and every counter of the NVMe health
   log or every ATA SMART attribute. It reads NVMe drives on all three hosts,
   and ATA drives through pass-through on Linux and on Windows.
+- Each health record names its source and its confidence: the drive, a USB
+  bridge, smartctl, or a measurement.
+- A drive that reports no health gets a measured record: 64 timed reads
+  spread over the whole drive.
+- eMMC life estimates on Linux.
+- A drive in a USB case answers SAT on Windows, through the SCSI control
+  code.
+- smartctl is a fallback when it is on the computer.
