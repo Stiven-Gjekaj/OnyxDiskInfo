@@ -172,13 +172,27 @@ pub fn identity(
     let at = |leaf: &str| attribute(fs, &format!("{BLOCK}/{name}/device/{leaf}"));
     // An SD card has no vendor and no model. It has a name instead.
     let model = at("model").or_else(|| at("name"));
-    let serial = at("serial").or_else(|| {
-        let page = fs
-            .read_bytes(&format!("{BLOCK}/{name}/device/vpd_pg80"))
-            .ok()?;
-        unit_serial_number(&page)
-    });
+    let serial = at("serial")
+        .or_else(|| {
+            let page = fs
+                .read_bytes(&format!("{BLOCK}/{name}/device/vpd_pg80"))
+                .ok()?;
+            unit_serial_number(&page)
+        })
+        .or_else(|| at("wwid").and_then(|wwid| naa_name(&wwid)));
     (at("vendor"), model, serial)
+}
+
+/// The world wide name of a drive with no serial number.
+///
+/// A virtual disk of Hyper-V gives no page 0x80. udev then takes the NAA name
+/// from page 0x83, and `lsblk` shows that as the serial number. Onyx does the
+/// same, so the two tools agree. Measured on a GitHub runner: `wwid` holds
+/// `naa.60022480cd4a0237a912d189be467917`, and `lsblk` shows the part after
+/// the dot. A name of another kind, such as `t10.`, is not a serial number.
+pub fn naa_name(wwid: &str) -> Option<String> {
+    let name = wwid.trim().strip_prefix("naa.")?;
+    (!name.is_empty()).then(|| name.to_string())
 }
 
 /// The serial number from page 0x80 of the vital product data.
@@ -1206,6 +1220,31 @@ mod tests {
             .bytes("/sys/block/sda/device/vpd_pg80", b"\x00\x80\x00\x04PAGE");
         let (_, _, serial) = identity(&fs, "sda");
         assert_eq!(serial.as_deref(), Some("FROMFILE"));
+    }
+
+    #[test]
+    fn a_drive_with_no_serial_and_no_page_takes_its_naa_name() {
+        let fs = MapSysfs::new().file(
+            "/sys/block/sda/device/wwid",
+            "naa.60022480cd4a0237a912d189be467917\n",
+        );
+        let (_, _, serial) = identity(&fs, "sda");
+        assert_eq!(serial.as_deref(), Some("60022480cd4a0237a912d189be467917"));
+    }
+
+    #[test]
+    fn the_product_data_page_wins_over_the_naa_name() {
+        let fs = MapSysfs::new()
+            .bytes("/sys/block/sda/device/vpd_pg80", b"\x00\x80\x00\x04PAGE")
+            .file("/sys/block/sda/device/wwid", "naa.5000c500a1b2c3d4\n");
+        let (_, _, serial) = identity(&fs, "sda");
+        assert_eq!(serial.as_deref(), Some("PAGE"));
+    }
+
+    #[test]
+    fn a_world_wide_name_of_another_kind_is_not_a_serial() {
+        assert!(naa_name("t10.ATA     QEMU HARDDISK   QM00001").is_none());
+        assert!(naa_name("naa.").is_none());
     }
 
     #[test]
