@@ -11,7 +11,7 @@ Each phase has a goal, the work in it, and an exit test.
 Do not start a phase until the phase it depends on passes its exit test.
 Each phase is many small commits.
 
-Nothing is built yet. P0 is next.
+P0 is done. CI passes on Windows, on macOS, and on Linux. P1 is next.
 
 ```mermaid
 flowchart LR
