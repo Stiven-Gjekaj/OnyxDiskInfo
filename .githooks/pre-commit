@@ -1,0 +1,10 @@
+#!/bin/sh
+# Refuses a commit with code that `cargo fmt` would change, so the format
+# check of the CI does not fail after a push.
+#
+# Turn it on once in each clone:
+#     git config core.hooksPath .githooks
+if ! cargo fmt --check >/dev/null 2>&1; then
+    echo "cargo fmt would change the code. Run cargo fmt, then commit again." >&2
+    exit 1
+fi
