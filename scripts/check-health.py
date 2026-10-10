@@ -10,6 +10,8 @@ Linux needs root for both tools, so CI runs it with sudo there.
 For each drive in `onyx list`:
 
 - When neither tool reads health data, the two agree, and the script says so.
+  Onyx then measures the drive, and the script prints the result and its
+  confidence, which must be low.
 - When only smartctl reads it, the script fails.
 - When both read it, the identity and each counter must agree. A value that
   moves between the two reads, such as the temperature or the hours, may
@@ -125,6 +127,14 @@ def main():
             "nvme_smart_health_information_log" in theirs or "ata_smart_attributes" in theirs
         )
 
+        if mine is not None and mine["source"] == "measured":
+            print(f"{label}: onyx measured it, with a {mine['confidence']} confidence: "
+                  f"{mine['health']['verdict']}, {mine['measurement']['reads']} reads, "
+                  f"{len(mine['measurement']['errors'])} failed")
+            why = "the drive reports no health data"
+            if mine["confidence"] != "low":
+                failures.append(f"{label}: a measurement with a {mine['confidence']} confidence")
+            mine = None
         if mine is None:
             if smartctl_reads:
                 failures.append(f"{label}: smartctl reads health data and onyx does not: {why}")
@@ -133,6 +143,9 @@ def main():
             continue
         if not smartctl_reads:
             print(f"{label}: only onyx reads health data, so nothing is compared")
+            continue
+        if mine["source"] == "smartctl":
+            print(f"{label}: onyx took the data from smartctl, so nothing is compared")
             continue
 
         def fail(message, label=label):
