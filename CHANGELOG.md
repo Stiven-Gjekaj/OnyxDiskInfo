@@ -25,3 +25,13 @@ Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 - A drive in a USB case answers SAT on Windows, through the SCSI control
   code.
 - smartctl is a fallback when it is on the computer.
+- `onyx scan` reads every block of a drive and sorts each one by its read
+  time.
+- `onyx bench` runs the four jobs of CrystalDiskMark on a drive, for reads,
+  or in a test file, for reads and writes.
+- `onyx test capacity` finds a drive that claims more space than it has, and
+  puts back each block that it wrote over.
+- `onyx test write` writes every block of a drive and reads each one back.
+- A test that writes refuses the system disk and a read-only drive, needs
+  `--force` for an internal drive, and asks for the model and the size of
+  the drive.
