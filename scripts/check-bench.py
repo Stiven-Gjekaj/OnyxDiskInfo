@@ -5,23 +5,32 @@ person can run it wherever fio is:
 
     python3 scripts/check-bench.py target/release/onyx <directory>
 
-Each tool gets its own test file of 1 GiB in the directory, and each one
-deletes it. fio runs each job as CrystalDiskMark defines it: one thread with
-`queue` commands in flight, through the asynchronous engine of the host, and
-no cache of the host. Onyx keeps the same number of commands in flight with
-one thread for each. The script passes when each speed of Onyx is within 10
-percent of the speed of fio.
+Both tools use one test file of 1 GiB in the directory. Onyx makes it, runs
+its jobs, and keeps it. fio then runs the same jobs on the same file, and
+the script deletes the file. A file that another program writes is laid out
+in another way, and fio read such a file 20 percent slower than its own on an
+APFS drive, so two files would compare two layouts and not two tools.
 
-The first version of this script gave fio `queue` threads of its own. Each
-fio thread then read or wrote its own sequential stream, and Onyx shares one
-stream between its threads, so the two did not run the same job.
+fio keeps `queue` commands in flight from one thread, as CrystalDiskMark
+defines a queue, with no cache of the host: libaio on Linux, windowsaio on
+Windows, and posixaio on macOS. A queue of threads is not the same job: each
+fio thread reads or writes its own sequential stream, and Onyx shares one
+stream between its threads. On one APFS drive, eight fio threads read at
+2.8 GB/s and wrote at 11 GB/s, faster than the drive can write.
 
-fio runs twice, once before Onyx and once after it. A drive in a cloud
-changes its speed from minute to minute, and two runs of fio on the same
-runner differed by 7 percent. So a job passes when the speed of Onyx is
-within 10 percent of the range that the two runs of fio span: at least 90
-percent of the slower run, and at most 110 percent of the faster one. The
-script prints all three speeds, so a person sees how far apart they are.
+macOS runs posixaio on four threads of its own (`kern.aiothreads`), so a
+queue deeper than four waits in fio and not in the drive. On one APFS drive,
+fio read at 7.0 GB/s with a queue of eight from its own file, and at 1.2 to
+2.2 GB/s from the file of Onyx, while fio with a queue of one and Onyx agreed
+on that file. So on macOS only the jobs with a queue of one are compared.
+Linux compares all four.
+
+fio runs twice. A job passes when the speed of Onyx is within 10 percent of
+the range that the two runs of fio span: at least 90 percent of the slower
+run, and at most 110 percent of the faster one. The script prints all three
+speeds, so a person sees how far apart they are. On the disk of a cloud
+runner, two runs of fio differed by up to 28 percent, so CI runs this as a
+report and the exit test runs on a quiet local drive.
 """
 
 import json
@@ -43,60 +52,77 @@ JOBS = [
 ]
 
 
-# The asynchronous engine of each host, which keeps a queue of commands in
-# flight from one thread.
-ENGINE = {"Linux": "libaio", "Darwin": "posixaio", "Windows": "windowsaio"}
+# The threads that macOS runs posixaio on (`kern.aiothreads`). A deeper queue
+# waits in fio and not in the drive.
+MACOS_AIO_THREADS = 4
 
 
 def fio(path, rw, bs, queue):
+    """The speed of fio, in bytes per second, with `queue` commands in flight,
+    or None when fio cannot run the job on this host."""
+    system = platform.system()
+    if system == "Linux":
+        options = ["--ioengine=libaio", f"--iodepth={queue}"]
+    elif system == "Windows":
+        options = ["--ioengine=windowsaio", f"--iodepth={queue}"]
+    elif queue <= MACOS_AIO_THREADS:
+        options = ["--ioengine=posixaio", f"--iodepth={queue}"]
+    else:
+        return None
     command = [
         "fio", "--name=onyx", f"--filename={path}", f"--size={SIZE}",
-        f"--rw={rw}", f"--bs={bs}", "--numjobs=1", f"--iodepth={queue}",
-        f"--ioengine={ENGINE[platform.system()]}", "--direct=1",
+        f"--rw={rw}", f"--bs={bs}", "--numjobs=1", *options, "--direct=1",
         f"--runtime={SECONDS}", "--time_based", "--output-format=json",
     ]
-    out = json.loads(subprocess.run(command, check=True, capture_output=True, text=True).stdout)
-    job = out["jobs"][0]
+    done = subprocess.run(command, capture_output=True, text=True)
+    if done.returncode != 0:
+        sys.exit(f"fio failed: {done.stderr.strip()}")
     side = "read" if "read" in rw else "write"
-    return job[side]["bw_bytes"]
+    return json.loads(done.stdout)["jobs"][0][side]["bw_bytes"]
 
 
 def main():
     if len(sys.argv) != 3:
         sys.exit("usage: check-bench.py <path to onyx> <directory>")
     onyx, directory = sys.argv[1], sys.argv[2]
-    fio_file = os.path.join(directory, "fio-bench.tmp")
-    onyx_file = os.path.join(directory, "onyx-bench.tmp")
+    test_file = os.path.join(directory, "onyx-bench.tmp")
+    if os.path.exists(test_file):
+        sys.exit(f"{test_file} exists. Remove it, or name another directory.")
 
     def fio_pass():
         speeds = {}
-        try:
-            for name, read, write, bs, queue in JOBS:
-                speeds[(name, False)] = fio(fio_file, read, bs, queue)
-                speeds[(name, True)] = fio(fio_file, write, bs, queue)
-        finally:
-            if os.path.exists(fio_file):
-                os.remove(fio_file)
+        for name, read, write, bs, queue in JOBS:
+            speeds[(name, False)] = fio(test_file, read, bs, queue)
+            speeds[(name, True)] = fio(test_file, write, bs, queue)
         return speeds
 
-    before = fio_pass()
-    done = subprocess.run(
-        [onyx, "bench", "--file", onyx_file, "--seconds", str(SECONDS), "--json"],
-        check=True, capture_output=True, text=True,
-    )
-    ours = {(j["job"], j["write"]): j["bytes_per_second"] for j in json.loads(done.stdout)["jobs"]}
-    after = fio_pass()
+    try:
+        done = subprocess.run(
+            [onyx, "bench", "--file", test_file, "--keep", "--seconds", str(SECONDS), "--json"],
+            check=True, capture_output=True, text=True,
+        )
+        ours = {(j["job"], j["write"]): j["bytes_per_second"] for j in json.loads(done.stdout)["jobs"]}
+        before = fio_pass()
+        after = fio_pass()
+    finally:
+        if os.path.exists(test_file):
+            os.remove(test_file)
 
     failures = []
-    print(f"{'JOB':<12} {'SIDE':<5} {'FIO 1':>8} {'ONYX':>8} {'FIO 2':>8}  MB/s")
+    skipped = 0
+    print(f"{'JOB':<12} {'SIDE':<5} {'ONYX':>8} {'FIO 1':>8} {'FIO 2':>8}  MB/s")
     for name, *_ in JOBS:
         for write in (False, True):
             key = (name, write)
+            side = "write" if write else "read"
+            if before[key] is None or after[key] is None:
+                skipped += 1
+                print(f"{name:<12} {side:<5} {ours[key] / 1e6:>8.1f}  fio cannot run this job here")
+                continue
             low = min(before[key], after[key]) * (1 - LIMIT)
             high = max(before[key], after[key]) * (1 + LIMIT)
-            side = "write" if write else "read"
             mark = "" if low <= ours[key] <= high else "  outside"
-            print(f"{name:<12} {side:<5} {before[key] / 1e6:>8.1f} {ours[key] / 1e6:>8.1f} "
+            print(f"{name:<12} {side:<5} {ours[key] / 1e6:>8.1f} {before[key] / 1e6:>8.1f} "
                   f"{after[key] / 1e6:>8.1f}{mark}")
             if mark:
                 failures.append(f"{name} {side}: {ours[key] / 1e6:.1f} MB/s is not between "
@@ -105,7 +131,7 @@ def main():
         print(f"FAIL {f}")
     if failures:
         sys.exit(1)
-    print("Each speed is within 10 percent of the range of fio.")
+    print(f"Each speed is within 10 percent of the range of fio. {skipped} were not compared.")
 
 
 if __name__ == "__main__":
