@@ -1,0 +1,18 @@
+[package]
+name = "onyx"
+description = "Reads the health of every disk, and tests, formats and erases it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+keywords = ["smart", "nvme", "disk", "health", "format"]
+categories = ["command-line-utilities", "hardware-support", "filesystem"]
+
+[dependencies]
+clap.workspace = true
+
+[lints]
+workspace = true
