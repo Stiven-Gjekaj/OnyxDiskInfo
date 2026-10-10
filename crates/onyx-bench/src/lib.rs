@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod bench;
 pub mod capacity;
 mod device;
 pub mod scan;
