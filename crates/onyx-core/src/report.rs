@@ -143,7 +143,7 @@ mod tests {
             r.identity(),
             (
                 Some("APPLE SSD AP0512Z"),
-                Some("05b171ac3e29a02e"),
+                Some("SERIALMASKED0001"),
                 Some("241.0.12")
             )
         );

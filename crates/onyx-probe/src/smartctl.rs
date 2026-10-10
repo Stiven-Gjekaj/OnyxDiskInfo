@@ -164,8 +164,9 @@ mod tests {
     use onyx_core::{Bus, DriveId};
 
     /// The JSON of `smartctl --json -a disk0` on an APPLE SSD AP0512Z, cut
-    /// down to the keys that Onyx reads, captured on 2026-10-10.
-    const APPLE_SSD: &str = r#"{"model_name": "APPLE SSD AP0512Z", "serial_number": "05b171ac3e29a02e", "firmware_version": "241.0.12", "smart_status": {"passed": true, "nvme": {"value": 0}}, "nvme_smart_health_information_log": {"nsid": -1, "critical_warning": 0, "temperature": 33, "available_spare": 100, "available_spare_threshold": 99, "percentage_used": 0, "data_units_read": 35161000, "data_units_written": 16954057, "host_reads": 768906324, "host_writes": 235695719, "controller_busy_time": 0, "power_cycles": 195, "power_on_hours": 111, "unsafe_shutdowns": 11, "media_errors": 0, "num_err_log_entries": 0}, "temperature": {"current": 33}, "power_on_time": {"hours": 111}, "power_cycle_count": 195, "device": {"name": "disk0", "info_name": "disk0", "type": "nvme", "protocol": "NVMe"}}"#;
+    /// down to the keys that Onyx reads, captured on 2026-10-10. The serial
+    /// number is replaced.
+    const APPLE_SSD: &str = r#"{"model_name": "APPLE SSD AP0512Z", "serial_number": "SERIALMASKED0001", "firmware_version": "241.0.12", "smart_status": {"passed": true, "nvme": {"value": 0}}, "nvme_smart_health_information_log": {"nsid": -1, "critical_warning": 0, "temperature": 33, "available_spare": 100, "available_spare_threshold": 99, "percentage_used": 0, "data_units_read": 35161000, "data_units_written": 16954057, "host_reads": 768906324, "host_writes": 235695719, "controller_busy_time": 0, "power_cycles": 195, "power_on_hours": 111, "unsafe_shutdowns": 11, "media_errors": 0, "num_err_log_entries": 0}, "temperature": {"current": 33}, "power_on_time": {"hours": 111}, "power_cycle_count": 195, "device": {"name": "disk0", "info_name": "disk0", "type": "nvme", "protocol": "NVMe"}}"#;
 
     #[test]
     fn the_json_of_a_real_nvme_drive_gives_the_same_report() {
@@ -176,7 +177,7 @@ mod tests {
             r.identity(),
             (
                 Some("APPLE SSD AP0512Z"),
-                Some("05b171ac3e29a02e"),
+                Some("SERIALMASKED0001"),
                 Some("241.0.12")
             )
         );

@@ -326,7 +326,7 @@ mod tests {
     fn apple() -> Value {
         serde_json::from_str(
             r#"{"number":1,"id":"disk0","node":"/dev/rdisk0","name":"APPLE SSD AP0512Z","vendor":null,
-            "model":"APPLE SSD AP0512Z","serial":"05b171ac3e29a02e","firmware":"241.0.12",
+            "model":"APPLE SSD AP0512Z","serial":"SERIALMASKED0001","firmware":"241.0.12",
             "size_bytes":500277792768,"logical_sector_size":4096,"physical_sector_size":null,
             "bus":"Fabric","connection":"internal","removable":false,"system":true,"read_only":false}"#,
         )
@@ -336,7 +336,7 @@ mod tests {
     fn apple_health() -> Value {
         serde_json::from_str(
             r#"{"id":"disk0","source":"drive","confidence":"high","health":{"verdict":"Good","reasons":[]},
-            "protocol":"NVMe","model":"APPLE SSD AP0512Z","serial":"05b171ac3e29a02e","firmware":"241.0.12",
+            "protocol":"NVMe","model":"APPLE SSD AP0512Z","serial":"SERIALMASKED0001","firmware":"241.0.12",
             "temperature_celsius":30,"power_on_hours":112,"power_cycles":195,
             "nvme":{"critical_warning":0,"available_spare":100,"available_spare_threshold":99,
             "percentage_used":0,"data_units_read":35268996,"data_units_written":17056320,

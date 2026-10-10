@@ -281,14 +281,16 @@ pub(crate) mod tests {
     }
 
     /// The identify data of the same drive, captured with
-    /// `smartctl -r ioctl,2 -i`. Only the first 528 bytes matter here.
+    /// `smartctl -r ioctl,2 -i`. Only the first 528 bytes matter here. The
+    /// serial number of the drive is replaced with `SERIALMASKED0001`, which
+    /// has the same length.
     pub(crate) fn apple_ssd_identify() -> Vec<u8> {
         buffer(
             IDENTIFY_BYTES,
             &[
                 (
                     0x00,
-                    "6b106b1030356231373161633365323961303265202020204150504c4520535344\
+                    "6b106b1053455249414c4d41534b454430303031202020204150504c4520535344\
                      204150303531325a20202020202020202020202020202020202020202020203234\
                      312e302e3132040000000008",
                 ),
@@ -304,7 +306,7 @@ pub(crate) mod tests {
         let c = controller(&apple_ssd_identify()).unwrap();
         assert_eq!(c.vendor_id, 0x106b);
         assert_eq!(c.subsystem_vendor_id, 0x106b);
-        assert_eq!(c.serial.as_deref(), Some("05b171ac3e29a02e"));
+        assert_eq!(c.serial.as_deref(), Some("SERIALMASKED0001"));
         assert_eq!(c.model.as_deref(), Some("APPLE SSD AP0512Z"));
         assert_eq!(c.firmware.as_deref(), Some("241.0.12"));
         assert_eq!(c.ieee_oui, 0);
