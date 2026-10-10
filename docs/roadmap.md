@@ -14,6 +14,8 @@ Each phase is many small commits.
 P0 and P1 are done. `onyx list` runs on Windows, on macOS, and on Linux.
 P2 passes its exit test for NVMe drives. The SATA half waits for a SATA
 drive.
+P3 is next. The owner chose on 2026-10-10 to start it while the SATA half
+of P2 stays open, because no SATA drive is at hand.
 
 ```mermaid
 flowchart LR
