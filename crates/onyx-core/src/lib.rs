@@ -7,6 +7,8 @@
 
 mod drive;
 mod error;
+mod size;
 
 pub use drive::{Bus, Connection, DriveId, DriveInfo};
 pub use error::{Error, Result};
+pub use size::{grouped, human_size, size_column};
