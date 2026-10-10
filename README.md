@@ -29,9 +29,10 @@ _One tool, the same on Windows, on macOS, and on Linux._
 ---
 
 > [!NOTE]
-> **`onyx list` works. Nothing reads the health of a drive yet.**
-> `onyx list` shows each drive, with its size, bus, firmware, and serial
-> number, on Windows, on macOS, and on Linux.
+> **`onyx list` and `onyx health` work.**
+> `onyx list` shows each drive on Windows, on macOS, and on Linux.
+> `onyx health` reads an NVMe drive on all three hosts, and agrees with
+> smartctl. The SATA path is written and waits for a SATA drive to test it.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
 > behind it.
@@ -70,11 +71,11 @@ A value that Onyx measures never looks like a value that the disk reports.
 
 ## The shape of the command
 
-This is the plan. Only `list` exists today.
+This is the plan. `list` and `health` exist today.
 
 ```
 onyx list
-onyx health <drive> [--json]
+onyx health <number> [--json]
 onyx test scan <drive>
 onyx test capacity <drive>
 onyx bench <drive>
