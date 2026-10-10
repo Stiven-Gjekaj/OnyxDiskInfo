@@ -14,8 +14,10 @@ Each phase is many small commits.
 P0 and P1 are done. `onyx list` runs on Windows, on macOS, and on Linux.
 P2 passes its exit test for NVMe drives. The SATA half waits for a SATA
 drive.
-P3 is next. The owner chose on 2026-10-10 to start it while the SATA half
-of P2 stays open, because no SATA drive is at hand.
+The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
+open, because no SATA drive is at hand.
+P3 is half done. Its open half needs a SATA drive in a USB case and a USB
+flash drive.
 
 ```mermaid
 flowchart LR
@@ -113,6 +115,27 @@ Work:
 
 Exit test: a SATA drive in a USB case shows its SMART.
 A USB flash drive with no SMART shows a record with a low confidence level.
+
+Result: half done.
+
+- Done: each health record names its source and its confidence. A drive
+  that reports nothing gets a measured record with a low confidence. CI
+  proves it on all three hosts, on Hyper-V virtual disks and macOS disk
+  images: 64 reads each, no failure, confidence low.
+- Done: eMMC life estimates on Linux, from `life_time` and `pre_eol_info`.
+  Tested against `sysfs` contents in the tests. No eMMC chip was at hand.
+- Done: the `smartctl --json` fallback. Its test reads the JSON of the
+  APPLE SSD. CI does not reach it, because no runner drive is one that
+  smartctl reads and Onyx does not.
+- Done: SAT through `SG_IO` on Linux and through `IOCTL_SCSI_PASS_THROUGH`
+  on Windows.
+- Open: a SATA drive in a USB case, which is the first half of the exit
+  test. No such drive was at hand.
+- Open: a real USB flash drive. The measured path ran only on virtual disks.
+  On macOS it needs `sudo onyx health <number>`.
+- Not done, by decision: the vendor commands of JMicron, ASMedia, and
+  Realtek bridges. [milestones.md](milestones.md) says why.
+- Not done, by decision: the SD health register, which is not a standard.
 
 ## P4: disk tests
 
