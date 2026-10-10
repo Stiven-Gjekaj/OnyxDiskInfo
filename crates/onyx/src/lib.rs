@@ -6,6 +6,7 @@
 use clap::Parser;
 
 pub mod cli;
+pub mod format;
 pub mod json;
 
 /// Run the command that the person typed, and give the exit code.
