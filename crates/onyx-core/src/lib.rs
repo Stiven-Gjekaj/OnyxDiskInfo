@@ -8,6 +8,7 @@
 mod drive;
 mod error;
 mod listing;
+pub mod nvme;
 mod size;
 
 pub use drive::{Bus, Connection, DriveId, DriveInfo};
