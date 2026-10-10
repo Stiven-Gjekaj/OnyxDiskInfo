@@ -161,10 +161,29 @@ Result: done, on Linux in CI.
   calls it fake, finds that it wraps every 64 MiB, and brackets the real end
   between 66,960,896 and 67,223,552 bytes. A loop device of 64 MiB is the
   control, and Onyx calls it genuine.
-- `scripts/check-bench.py` runs the eight
-  jobs of CrystalDiskMark with fio and with `onyx bench --file`, on the same
-  runner. Each speed of Onyx is within 10 percent of fio. The widest gap in
-  the run of 2026-10-10 was 6.4 percent, for RND4K Q1T1 writes.
+- The benchmark half is partly proven, and not done.
+  `scripts/check-bench.py` runs the jobs of CrystalDiskMark with fio and with
+  `onyx bench --file`, on one shared test file, and fio runs twice. A job
+  passes when Onyx is within 10 percent of the range of the two runs of fio.
+
+  On a cloud runner of Linux, with libaio: all eight measurements passed in
+  two runs, and failed in two. Two runs of fio in one job differed by up to
+  28 percent there, so CI reports the check and does not fail on it.
+
+  On the APPLE SSD of a MacBook Air, with posixaio: only the jobs with a
+  queue of one compare, because macOS runs posixaio on four threads and fio
+  cannot hold 32 jobs in the shared memory of macOS. The SEQ1M Q1T1 write
+  and the RND4K Q1T1 write passed in each of four runs. The reads did not
+  hold still: fio read the same file at 5.0 to 5.3 GB/s in one run and at
+  1.4 to 2.1 GB/s in the next, and Onyx read 4K at 61 to 76 MB/s.
+
+  What the check found and fixed on the way: a test file that another
+  program writes is laid out in another way, and fio read such a file 20
+  percent slower than its own. A queue of fio threads is not the queue of
+  CrystalDiskMark: eight threads wrote at 11 GB/s on a drive that cannot.
+
+  Open: a run on a quiet drive, or a side by side run with CrystalDiskMark on
+  Windows.
 
 What the first run of the capacity test found: a fake drive rarely puts its
 real end on the start of a probe, so the first probe past the end reads back
