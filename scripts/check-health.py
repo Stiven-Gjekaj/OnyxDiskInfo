@@ -129,7 +129,7 @@ def main():
             if smartctl_reads:
                 failures.append(f"{label}: smartctl reads health data and onyx does not: {why}")
             else:
-                print(f"{label}: neither tool reads health data. onyx: {why}")
+                print(f"{label}: neither tool reads health data. {why}")
             continue
         if not smartctl_reads:
             print(f"{label}: only onyx reads health data, so nothing is compared")
