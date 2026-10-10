@@ -1,3 +1,7 @@
+<div align="center">
+  <a href="../README.md"><b>OnyxDiskInfo</b></a>
+</div>
+
 # The roadmap
 
 [docs/milestones.md](milestones.md) says what Onyx does and why.
