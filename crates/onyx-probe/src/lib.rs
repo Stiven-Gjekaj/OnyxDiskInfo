@@ -56,7 +56,17 @@ pub fn read_health(drive: &DriveInfo) -> Result<RawHealth> {
             reason: "macOS gives no SMART interface for this drive".to_string(),
         })
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        if drive.bus == onyx_core::Bus::Nvme {
+            return linux::smart::nvme_health(&drive.node);
+        }
+        linux::smart::ata_health(&drive.node)?.ok_or_else(|| Error::NoHealthData {
+            name: drive.name.clone(),
+            reason: "the drive refused ATA PASS-THROUGH".to_string(),
+        })
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = drive;
         Err(Error::Unsupported {

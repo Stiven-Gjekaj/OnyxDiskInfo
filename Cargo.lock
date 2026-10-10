@@ -177,6 +177,7 @@ dependencies = [
  "core-foundation",
  "core-foundation-sys",
  "io-kit-sys",
+ "libc",
  "onyx-core",
  "windows-sys 0.59.0",
 ]

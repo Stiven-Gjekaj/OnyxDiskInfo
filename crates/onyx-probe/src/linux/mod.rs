@@ -8,4 +8,6 @@
 pub mod host;
 pub mod parse;
 pub mod passthru;
+#[cfg(target_os = "linux")]
+pub mod smart;
 pub mod source;
