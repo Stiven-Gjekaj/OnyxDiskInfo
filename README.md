@@ -35,6 +35,8 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > smartctl. A drive that reports nothing gets a measured record with a low
 > confidence. The SATA and USB bridge paths are written and wait for a drive
 > to test them.
+> `onyx scan`, `onyx bench`, and `onyx test` work. The benchmarks agree with
+> fio within 10 percent, and the capacity test finds a fake drive.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
 > behind it.
@@ -73,17 +75,26 @@ A value that Onyx measures never looks like a value that the disk reports.
 
 ## The shape of the command
 
-This is the plan. `list` and `health` exist today.
+Every command but `format` and `erase` exists today.
 
 ```
 onyx list
 onyx health <number> [--json]
-onyx test scan <drive>
-onyx test capacity <drive>
-onyx bench <drive>
-onyx format <drive> --fs exfat
-onyx erase <drive>
+onyx scan <number> [--json]
+onyx bench <number> [--json]
+onyx bench --file <path> [--size-mib 1024] [--json]
+onyx test capacity <number> [--force] [--confirm "<model> <size>"]
+onyx test write <number> [--force] [--confirm "<model> <size>"]
+onyx format <number> --fs exfat
+onyx erase <number>
 ```
+
+`scan` reads every block and sorts each one by its read time, like MHDD and
+Victoria. `bench` runs the four jobs of CrystalDiskMark: on a drive it only
+reads, and in a test file it reads and writes, then deletes the file.
+`test capacity` finds a fake drive that claims more space than it has. It
+saves the blocks that it writes over and puts them back. `test write` writes
+every block and reads each one back, and it erases the drive.
 
 A command that reads never writes.
 A command that writes asks you to confirm the drive, and it refuses the disk
