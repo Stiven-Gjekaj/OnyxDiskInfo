@@ -12,7 +12,8 @@ Do not start a phase until the phase it depends on passes its exit test.
 Each phase is many small commits.
 
 P0 and P1 are done. `onyx list` runs on Windows, on macOS, and on Linux.
-P2 is next.
+P2 passes its exit test for NVMe drives. The SATA half waits for a SATA
+drive.
 
 ```mermaid
 flowchart LR
@@ -76,6 +77,28 @@ It also decodes the NVMe health log.
 Exit test: on each host, the values agree with `smartctl -a` for one SATA
 drive and one NVMe drive.
 A test decodes a raw byte dump from each drive.
+
+Result for NVMe: done.
+`scripts/check-health.py` compares `onyx health --json` with
+`smartctl --json -a`, and CI runs it on each host.
+
+- macOS: an APPLE SSD AP0512Z, through NVMeSMARTLib, by hand. The macOS
+  runner has only virtual disks, and neither tool reads them.
+- Linux: the MSFT NVMe Accelerator of the runner, with sudo, in CI.
+- Windows: the Virtual_Disk NVME Premium and the Microsoft NVMe Direct Disk
+  v2 of one runner, in CI. Other Windows runners have only SCSI virtual
+  disks, and neither tool reads them.
+
+The decoder test of the NVMe health log and of Identify Controller uses the
+bytes of the APPLE SSD, captured with `smartctl -r ioctl,2`.
+
+Open for SATA:
+
+- No SATA drive was at hand. The ATA decoders are tested against blocks
+  built from the ACS layout, and not against a captured dump.
+- The Linux and the Windows shims send IDENTIFY DEVICE and the SMART reads
+  through ATA PASS-THROUGH. No SATA drive has answered them yet.
+- macOS has no ATA path yet. It needs `IOATASMARTInterface`.
 
 ## P3: disks without SMART
 
