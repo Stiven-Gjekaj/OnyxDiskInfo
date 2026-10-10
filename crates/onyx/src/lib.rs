@@ -7,6 +7,7 @@ use clap::Parser;
 
 pub mod cli;
 pub mod format;
+pub mod health;
 pub mod json;
 pub mod list;
 pub mod report;
@@ -20,6 +21,7 @@ pub fn run() -> i32 {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::List { json } => list::run(json),
+        Command::Health { drive, json } => health::run(drive, json),
     };
     match result {
         Ok(code) => code,

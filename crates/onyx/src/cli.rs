@@ -20,6 +20,15 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Show the health of one drive. This sends read commands to the drive
+    /// and writes nothing. Most hosts need administrator rights for it.
+    Health {
+        /// The number of the drive, as `onyx list` shows it.
+        drive: usize,
+        /// Print JSON for a script, and not text for a person.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[cfg(test)]
@@ -47,6 +56,20 @@ mod tests {
         assert!(matches!(cli.command, Command::List { json: true }));
         let cli = Cli::try_parse_from(["onyx", "list"]).unwrap();
         assert!(matches!(cli.command, Command::List { json: false }));
+    }
+
+    #[test]
+    fn health_takes_the_number_of_a_drive() {
+        let cli = Cli::try_parse_from(["onyx", "health", "2", "--json"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Health {
+                drive: 2,
+                json: true
+            }
+        ));
+        assert!(Cli::try_parse_from(["onyx", "health"]).is_err());
+        assert!(Cli::try_parse_from(["onyx", "health", "disk0"]).is_err());
     }
 
     #[test]
