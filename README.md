@@ -29,9 +29,9 @@ _One tool, the same on Windows, on macOS, and on Linux._
 ---
 
 > [!NOTE]
-> **Nothing works yet.**
-> The repository holds the plan and the scaffold.
-> `onyx --version` is the only command.
+> **`onyx list` works. Nothing reads the health of a drive yet.**
+> `onyx list` shows each drive, with its size, bus, firmware, and serial
+> number, on Windows, on macOS, and on Linux.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
 > behind it.
@@ -70,7 +70,7 @@ A value that Onyx measures never looks like a value that the disk reports.
 
 ## The shape of the command
 
-This is the plan. Only `--version` exists today.
+This is the plan. Only `list` exists today.
 
 ```
 onyx list
