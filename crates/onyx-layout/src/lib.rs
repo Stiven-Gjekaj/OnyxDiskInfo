@@ -8,6 +8,7 @@
 
 mod crc32;
 pub mod fs;
+pub mod layout;
 pub mod table;
 mod target;
 
