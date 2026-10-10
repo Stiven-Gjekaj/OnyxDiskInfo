@@ -40,6 +40,77 @@ impl fmt::Display for Verdict {
     }
 }
 
+/// Where the health data came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Source {
+    /// The drive answered a native command: NVMe, or ATA on a SATA port.
+    Drive,
+    /// The drive answered through a USB bridge that translated the command.
+    Bridge,
+    /// `smartctl` read the drive, and Onyx read the JSON of `smartctl`.
+    Smartctl,
+    /// The drive reports no health. Onyx measured the drive itself.
+    Measured,
+}
+
+/// How far a person can trust a verdict.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Confidence {
+    /// Onyx measured the drive. A good result says only that the reads
+    /// worked, and not that the medium is healthy.
+    Low,
+    /// The drive reported the values, and another program decoded them.
+    /// Onyx cannot check the bytes.
+    Medium,
+    /// The drive reported the values, and Onyx decoded the bytes itself.
+    High,
+}
+
+impl Source {
+    /// The word that a person reads.
+    pub fn label(self) -> &'static str {
+        match self {
+            Source::Drive => "the drive",
+            Source::Bridge => "the drive, through a USB bridge",
+            Source::Smartctl => "smartctl",
+            Source::Measured => "measured by Onyx",
+        }
+    }
+
+    /// The word for a script.
+    pub fn key(self) -> &'static str {
+        match self {
+            Source::Drive => "drive",
+            Source::Bridge => "bridge",
+            Source::Smartctl => "smartctl",
+            Source::Measured => "measured",
+        }
+    }
+
+    /// The confidence that this source gives.
+    ///
+    /// A bridge passes the bytes of the drive through unchanged, so Onyx
+    /// still decodes them itself.
+    pub fn confidence(self) -> Confidence {
+        match self {
+            Source::Drive | Source::Bridge => Confidence::High,
+            Source::Smartctl => Confidence::Medium,
+            Source::Measured => Confidence::Low,
+        }
+    }
+}
+
+impl Confidence {
+    /// The word that a person reads.
+    pub fn label(self) -> &'static str {
+        match self {
+            Confidence::High => "high",
+            Confidence::Medium => "medium",
+            Confidence::Low => "low",
+        }
+    }
+}
+
 /// A verdict and the reasons for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Assessment {
@@ -299,6 +370,29 @@ mod tests {
         // zero here, and the drive is still good.
         let a = ata(&smart_with(|s| s.attributes[1].current = 0));
         assert_eq!(a.verdict, Verdict::Good, "{:?}", a.reasons);
+    }
+
+    #[test]
+    fn only_a_measurement_gives_a_low_confidence() {
+        assert_eq!(Source::Drive.confidence(), Confidence::High);
+        assert_eq!(Source::Bridge.confidence(), Confidence::High);
+        assert_eq!(Source::Smartctl.confidence(), Confidence::Medium);
+        assert_eq!(Source::Measured.confidence(), Confidence::Low);
+        assert!(Confidence::Low < Confidence::Medium);
+        assert!(Confidence::Medium < Confidence::High);
+    }
+
+    #[test]
+    fn each_source_has_a_word_for_a_person_and_one_for_a_script() {
+        for source in [
+            Source::Drive,
+            Source::Bridge,
+            Source::Smartctl,
+            Source::Measured,
+        ] {
+            assert!(!source.label().is_empty());
+            assert!(source.key().chars().all(|c| c.is_ascii_lowercase()));
+        }
     }
 
     #[test]
