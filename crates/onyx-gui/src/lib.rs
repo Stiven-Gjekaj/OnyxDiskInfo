@@ -13,5 +13,6 @@ mod ui {
 
 pub use ui::*;
 
+pub mod app;
 pub mod elevate;
 pub mod view;

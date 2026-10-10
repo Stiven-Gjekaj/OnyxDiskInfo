@@ -12,6 +12,10 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "OnyxDiskInfo"
+path = "src/main.rs"
+
 [dependencies]
 # The app shows what `onyx health --json` prints, so it builds its view from
 # that JSON, whichever way the JSON came.
