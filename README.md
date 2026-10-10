@@ -32,7 +32,9 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > **`onyx list` and `onyx health` work.**
 > `onyx list` shows each drive on Windows, on macOS, and on Linux.
 > `onyx health` reads an NVMe drive on all three hosts, and agrees with
-> smartctl. The SATA path is written and waits for a SATA drive to test it.
+> smartctl. A drive that reports nothing gets a measured record with a low
+> confidence. The SATA and USB bridge paths are written and wait for a drive
+> to test them.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
 > behind it.
@@ -53,7 +55,7 @@ It has two faces that share one library:
 | Area | Work |
 |---|---|
 | Health | ATA SMART, the NVMe health log, SCSI log pages, eMMC life estimates, the temperature, and a health score. |
-| Bridges | SAT pass-through and the JMicron, ASMedia, and Realtek commands, for a drive in a USB case. `smartctl` is a fallback if it is on your computer. |
+| Bridges | SAT pass-through for a drive in a USB case. `smartctl` is a fallback if it is on your computer, and it reads the JMicron, ASMedia, and Realtek bridges until Onyx can test its own commands for them. |
 | Tests | A surface scan, a write and verify test, a fake capacity test, and benchmarks. |
 | Layout | GPT and MBR. Onyx writes FAT12, FAT16, FAT32, and exFAT itself. The tools of the host write NTFS, ext4, btrfs, XFS, APFS, and HFS+. |
 | Erase | ATA Secure Erase, NVMe Format, NVMe Sanitize, a full TRIM, and overwrite passes. |
