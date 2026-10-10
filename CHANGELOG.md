@@ -35,3 +35,10 @@ Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 - A test that writes refuses the system disk and a read-only drive, needs
   `--force` for an internal drive, and asks for the model and the size of
   the drive.
+- `OnyxDiskInfo`, a desktop app in the style of CrystalDiskInfo: a tab for
+  each drive, the health and the temperature, the details of the drive, and
+  the attribute table. It follows the light or the dark scheme of the
+  system.
+- The desktop app asks for administrator rights when it starts on Windows.
+  On macOS and on Linux, a drive that needs root gets a button that reads it
+  through the password dialog of the system.
