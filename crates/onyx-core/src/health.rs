@@ -122,7 +122,7 @@ pub struct Assessment {
 }
 
 impl Assessment {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Assessment {
             verdict: Verdict::Good,
             reasons: Vec::new(),
@@ -130,7 +130,7 @@ impl Assessment {
     }
 
     /// Add a reason. The verdict is the worst of all the reasons.
-    fn add(&mut self, verdict: Verdict, reason: String) {
+    pub(crate) fn add(&mut self, verdict: Verdict, reason: String) {
         self.verdict = self.verdict.max(verdict);
         self.reasons.push(reason);
     }

@@ -11,6 +11,7 @@ pub mod emmc;
 mod error;
 pub mod health;
 mod listing;
+pub mod measure;
 pub mod nvme;
 mod report;
 mod size;
