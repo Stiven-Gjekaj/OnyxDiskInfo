@@ -7,6 +7,8 @@
 
 use onyx_core::{Error, Result};
 
+pub use crate::sat::{ATA_IDENTIFY, ATA_SMART_READ_DATA, ATA_SMART_READ_THRESHOLDS, AtaCommand};
+
 /// `IOCTL_STORAGE_QUERY_PROPERTY`.
 pub const IOCTL_STORAGE_QUERY_PROPERTY: u32 = 0x002D_1400;
 
@@ -119,39 +121,6 @@ pub fn nvme_answer(answer: &[u8], want: u32) -> Result<Vec<u8>> {
             )
         })
 }
-
-/// One ATA command that reads 512 bytes, as the task file holds it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AtaCommand {
-    pub command: u8,
-    pub features: u8,
-    pub lba_mid: u8,
-    pub lba_high: u8,
-}
-
-/// IDENTIFY DEVICE.
-pub const ATA_IDENTIFY: AtaCommand = AtaCommand {
-    command: 0xec,
-    features: 0,
-    lba_mid: 0,
-    lba_high: 0,
-};
-
-/// SMART READ DATA.
-pub const ATA_SMART_READ_DATA: AtaCommand = AtaCommand {
-    command: 0xb0,
-    features: 0xd0,
-    lba_mid: 0x4f,
-    lba_high: 0xc2,
-};
-
-/// SMART READ THRESHOLDS.
-pub const ATA_SMART_READ_THRESHOLDS: AtaCommand = AtaCommand {
-    command: 0xb0,
-    features: 0xd1,
-    lba_mid: 0x4f,
-    lba_high: 0xc2,
-};
 
 /// The size of `ATA_PASS_THROUGH_EX` on a 64-bit host. `DataBufferOffset`
 /// is a `ULONG_PTR`, so it sits at byte 24 after four bytes of padding.
