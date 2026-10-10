@@ -10,6 +10,7 @@ pub mod disk_tests;
 pub mod format;
 pub mod health;
 pub mod json;
+pub mod layout;
 pub mod list;
 pub mod report;
 pub mod tests_format;
@@ -43,6 +44,12 @@ pub fn run() -> i32 {
             TestCommand::Capacity { target } => disk_tests::run_capacity(&target),
             TestCommand::Write { target } => disk_tests::run_write(&target),
         },
+        Command::Format {
+            target,
+            fs,
+            table,
+            label,
+        } => layout::run_format(&target, fs, table, &label),
     };
     match result {
         Ok(code) => code,

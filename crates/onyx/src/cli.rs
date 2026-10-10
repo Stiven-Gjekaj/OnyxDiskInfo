@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::{ArgGroup, Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 
 /// Reads the health of every disk, and tests, formats and erases it.
 #[derive(Debug, Parser)]
@@ -69,6 +69,39 @@ pub enum Command {
         #[command(subcommand)]
         test: TestCommand,
     },
+    /// Write a new partition table with one partition, and a file system in
+    /// it. This erases the drive.
+    Format {
+        #[command(flatten)]
+        target: WriteTarget,
+        /// The file system.
+        #[arg(long, value_enum)]
+        fs: FsChoice,
+        /// The partition table. MBR is the default, because each camera, car
+        /// radio, and console reads it.
+        #[arg(long, value_enum, default_value_t = TableChoice::Mbr)]
+        table: TableChoice,
+        /// The name of the volume. FAT keeps 11 characters, and exFAT keeps
+        /// 11 too.
+        #[arg(long, default_value = "ONYX")]
+        label: String,
+    },
+}
+
+/// A file system that `onyx format` writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum FsChoice {
+    Fat12,
+    Fat16,
+    Fat32,
+    Exfat,
+}
+
+/// A partition table that `onyx format` writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum TableChoice {
+    Gpt,
+    Mbr,
 }
 
 /// A test that writes to a drive. Each one asks for the model and the size of
@@ -187,6 +220,32 @@ mod tests {
         assert!(Cli::try_parse_from(["onyx", "test", "write"]).is_err());
         assert!(Cli::try_parse_from(["onyx", "test", "write", "--image", "x.img"]).is_ok());
         assert!(Cli::try_parse_from(["onyx", "test", "write", "2", "--image", "x.img"]).is_err());
+    }
+
+    #[test]
+    fn format_takes_a_file_system_and_a_table_that_is_mbr_by_default() {
+        let cli = Cli::try_parse_from(["onyx", "format", "2", "--fs", "exfat"]).unwrap();
+        let Command::Format {
+            target,
+            fs,
+            table,
+            label,
+        } = cli.command
+        else {
+            panic!("not format");
+        };
+        assert_eq!(target.drive, Some(2));
+        assert_eq!(fs, super::FsChoice::Exfat);
+        assert_eq!(table, super::TableChoice::Mbr);
+        assert_eq!(label, "ONYX");
+        assert!(Cli::try_parse_from(["onyx", "format", "2"]).is_err());
+        assert!(Cli::try_parse_from(["onyx", "format", "2", "--fs", "ext9"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "onyx", "format", "--image", "x.img", "--fs", "fat32", "--table", "gpt"
+            ])
+            .is_ok()
+        );
     }
 
     #[test]

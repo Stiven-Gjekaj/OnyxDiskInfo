@@ -37,7 +37,7 @@ fn device(drive: &DriveInfo, file: &std::fs::File) -> Result<FileDevice> {
 }
 
 /// A value that changes from run to run, to mark the blocks of one run.
-fn run_mark() -> u64 {
+pub(crate) fn run_mark() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos() as u64)
@@ -244,14 +244,14 @@ fn confirm(drive: &DriveInfo, confirm: Option<&str>, what: &str) -> Result<()> {
 
 /// What a test that writes holds open: the drive or the image, and on
 /// Windows the locks on its volumes.
-struct Target {
-    drive: DriveInfo,
-    file: std::fs::File,
+pub(crate) struct Target {
+    pub(crate) drive: DriveInfo,
+    pub(crate) file: std::fs::File,
     _open: Option<onyx_probe::OpenDrive>,
 }
 
 /// Check the target, ask for the phrase, and open it for a test that writes.
-fn open_for_write(target: &WriteTarget, what: &str) -> Result<Target> {
+pub(crate) fn open_for_write(target: &WriteTarget, what: &str) -> Result<Target> {
     if let Some(path) = &target.image {
         let (file, size) = open_image(path, Access::Write)?;
         // The file name is what the person reads and types. The whole path

@@ -15,6 +15,7 @@ categories = ["command-line-utilities", "hardware-support", "filesystem"]
 clap.workspace = true
 onyx-bench.workspace = true
 onyx-core.workspace = true
+onyx-layout.workspace = true
 onyx-probe.workspace = true
 
 [lints]

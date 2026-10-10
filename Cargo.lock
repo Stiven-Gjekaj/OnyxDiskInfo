@@ -3286,6 +3286,7 @@ dependencies = [
  "clap",
  "onyx-bench",
  "onyx-core",
+ "onyx-layout",
  "onyx-probe",
 ]
 
