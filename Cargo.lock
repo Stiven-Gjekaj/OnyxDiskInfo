@@ -179,6 +179,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "onyx-bench"
+version = "0.1.0"
+dependencies = [
+ "onyx-core",
+]
+
+[[package]]
 name = "onyx-core"
 version = "0.1.0"
 

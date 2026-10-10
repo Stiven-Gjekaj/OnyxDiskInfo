@@ -13,6 +13,7 @@ authors = ["Stiven Gjekaj <stivenagostingjekaj@gmail.com>"]
 # Each version is exact. A new version of a dependency is a commit of its own,
 # so a change in behaviour has one place to look.
 [workspace.dependencies]
+onyx-bench = { path = "crates/onyx-bench" }
 onyx-core = { path = "crates/onyx-core" }
 onyx-probe = { path = "crates/onyx-probe" }
 anyhow = "=1.0.104"

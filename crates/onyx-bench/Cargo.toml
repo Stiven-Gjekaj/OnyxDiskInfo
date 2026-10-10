@@ -1,0 +1,17 @@
+[package]
+name = "onyx-bench"
+description = "The disk tests of Onyx: the surface scan, the write test, the capacity test, and the benchmarks."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# Every test here runs against the Device trait. A test gives it memory or a
+# temporary file, and never a drive.
+[dependencies]
+onyx-core.workspace = true
+
+[lints]
+workspace = true
