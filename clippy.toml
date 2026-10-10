@@ -1,0 +1,4 @@
+# A test may unwrap. A failed unwrap in a test is a failed test, which is
+# what a test is for.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

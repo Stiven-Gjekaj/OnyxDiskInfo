@@ -1,0 +1,16 @@
+[package]
+name = "onyx-core"
+description = "The part of Onyx that no host changes. It decodes what a disk reports and scores its health."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# This crate takes no dependency. It reads bytes and returns values, so a
+# test gives it bytes from a real disk and needs no disk.
+[dependencies]
+
+[lints]
+workspace = true
