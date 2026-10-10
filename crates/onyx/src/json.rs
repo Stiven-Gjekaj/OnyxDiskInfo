@@ -10,7 +10,10 @@ use std::fmt::{self, Write as _};
 pub enum Json {
     Null,
     Bool(bool),
-    Number(u64),
+    /// A count. NVMe counts take 128 bits.
+    Number(u128),
+    /// A number that can be below zero, such as a temperature.
+    Signed(i64),
     Text(String),
     List(Vec<Json>),
     /// The members of an object, in the order that they print.
@@ -30,7 +33,7 @@ impl Json {
 
     /// A number, or `null` when there is none.
     pub fn maybe_number(number: Option<u64>) -> Json {
-        number.map_or(Json::Null, Json::Number)
+        number.map_or(Json::Null, |n| Json::Number(n.into()))
     }
 }
 
@@ -41,6 +44,7 @@ impl fmt::Display for Json {
             Json::Null => f.write_str("null"),
             Json::Bool(value) => write!(f, "{value}"),
             Json::Number(value) => write!(f, "{value}"),
+            Json::Signed(value) => write!(f, "{value}"),
             Json::Text(text) => quoted(f, text),
             Json::List(items) => {
                 f.write_char('[')?;
@@ -120,6 +124,15 @@ mod tests {
     #[test]
     fn a_string_keeps_its_letters_that_are_not_ascii() {
         assert_eq!(Json::text("Çelës ü").to_string(), "\"Çelës ü\"");
+    }
+
+    #[test]
+    fn a_number_holds_128_bits_and_a_signed_number_holds_a_sign() {
+        assert_eq!(
+            Json::Number(u128::MAX).to_string(),
+            "340282366920938463463374607431768211455"
+        );
+        assert_eq!(Json::Signed(-5).to_string(), "-5");
     }
 
     #[test]

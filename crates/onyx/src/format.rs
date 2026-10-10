@@ -102,7 +102,7 @@ pub fn list_json(drives: &[DriveInfo]) -> Json {
 /// One drive, as JSON. `number` is the number that the table prints.
 pub fn drive_json(number: usize, drive: &DriveInfo) -> Json {
     Json::Object(vec![
-        ("number", Json::Number(number as u64)),
+        ("number", Json::Number(number as u128)),
         ("id", Json::text(drive.id.as_str())),
         ("node", Json::text(&drive.node)),
         ("name", Json::text(&drive.name)),
@@ -110,7 +110,7 @@ pub fn drive_json(number: usize, drive: &DriveInfo) -> Json {
         ("model", Json::maybe_text(drive.model.as_deref())),
         ("serial", Json::maybe_text(drive.serial.as_deref())),
         ("firmware", Json::maybe_text(drive.firmware.as_deref())),
-        ("size_bytes", Json::Number(drive.size_bytes)),
+        ("size_bytes", Json::Number(drive.size_bytes.into())),
         (
             "logical_sector_size",
             Json::Number(drive.logical_sector_size.into()),
