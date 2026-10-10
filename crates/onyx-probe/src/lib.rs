@@ -22,7 +22,7 @@ pub mod smartctl;
 pub mod windows;
 
 pub use health::{RawHealth, source_of};
-pub use open::{Access, OpenDrive, open_drive};
+pub use open::{Access, OpenDrive, open_drive, open_test_file};
 
 /// The drive list of the host that this build runs on.
 ///

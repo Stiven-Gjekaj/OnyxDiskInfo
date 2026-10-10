@@ -60,6 +60,33 @@ pub fn open_drive(drive: &DriveInfo, access: Access) -> Result<OpenDrive> {
     }
 }
 
+/// Create a test file for a benchmark, or open the one there, without the
+/// cache of the host.
+///
+/// A benchmark in a file on a mounted volume writes without erasing the
+/// drive, as CrystalDiskMark does. The caller deletes the file at the end.
+pub fn open_test_file(path: &std::path::Path) -> Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_DIRECT);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH.
+        options.custom_flags(0x2000_0000 | 0x8000_0000);
+    }
+    let file = options
+        .open(path)
+        .map_err(|e| refused(e, &path.display().to_string()))?;
+    #[cfg(target_os = "macos")]
+    crate::macos::open::no_cache(&file)?;
+    Ok(file)
+}
+
 /// The error for a call that the host refused, with missing rights as their
 /// own error.
 pub(crate) fn refused(e: std::io::Error, what: &str) -> onyx_core::Error {

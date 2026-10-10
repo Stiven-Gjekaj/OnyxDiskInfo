@@ -7,6 +7,7 @@
 
 use std::ffi::CStr;
 use std::fs::{File, OpenOptions};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::MetadataExt;
 
 use onyx_core::{DriveInfo, Error, Result};
@@ -63,4 +64,15 @@ pub fn open(drive: &DriveInfo, access: Access) -> Result<File> {
         .write(access == Access::Write)
         .open(&drive.node)
         .map_err(|e| refused(e, &drive.node))
+}
+
+/// Turn off the cache of the host for one open file. macOS has no flag for
+/// the open, and `F_NOCACHE` does it afterwards.
+pub fn no_cache(file: &File) -> Result<()> {
+    // SAFETY: the descriptor is live for as long as `file` is.
+    let answer = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_NOCACHE, 1) };
+    if answer == -1 {
+        return Err(Error::Io(std::io::Error::last_os_error()));
+    }
+    Ok(())
 }
