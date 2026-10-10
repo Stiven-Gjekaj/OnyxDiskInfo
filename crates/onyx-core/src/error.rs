@@ -23,6 +23,18 @@ pub enum Error {
         /// What is wrong with the answer.
         detail: String,
     },
+    /// The drive gives no health data through any way that Onyx knows yet.
+    NoHealthData {
+        /// The drive, as the list names it.
+        name: String,
+        /// Why, as far as the code can prove it.
+        reason: String,
+    },
+    /// The host refused the command because the user has too few rights.
+    NeedsPrivilege {
+        /// What the host refused.
+        what: String,
+    },
     /// No drive carries this name or this number.
     NoSuchDrive {
         /// The name or the number that the person gave.
@@ -51,6 +63,13 @@ impl fmt::Display for Error {
                 write!(f, "Onyx does not support this operating system: {target}")
             }
             Error::Host { source, detail } => write!(f, "{source}: {detail}"),
+            Error::NoHealthData { name, reason } => {
+                write!(f, "{name} gives no health data: {reason}")
+            }
+            Error::NeedsPrivilege { what } => write!(
+                f,
+                "{what} needs administrator rights. Run the command again with sudo, or from an administrator shell"
+            ),
             Error::NoSuchDrive { wanted } => {
                 write!(f, "no drive is {wanted}. Run `onyx list` to see the drives")
             }
@@ -89,6 +108,26 @@ mod tests {
             wanted: "7".to_string(),
         };
         assert!(e.to_string().contains("onyx list"), "{e}");
+    }
+
+    #[test]
+    fn a_drive_with_no_health_data_says_why() {
+        let e = Error::NoHealthData {
+            name: "Samsung Flash Drive".to_string(),
+            reason: "the USB bridge passes no ATA command".to_string(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "Samsung Flash Drive gives no health data: the USB bridge passes no ATA command"
+        );
+    }
+
+    #[test]
+    fn a_refusal_for_rights_names_the_fix() {
+        let e = Error::NeedsPrivilege {
+            what: "/dev/sda".to_string(),
+        };
+        assert!(e.to_string().contains("sudo"), "{e}");
     }
 
     #[test]
