@@ -17,7 +17,8 @@ drive.
 The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
 open, because no SATA drive is at hand.
 P3 is done but for its first half, which needs a SATA drive in a USB case.
-P4 is done. P5 is next.
+P4 is done but for its benchmark half, which is partly proven.
+P5 is done. P6 is next.
 
 ```mermaid
 flowchart LR
@@ -203,6 +204,24 @@ CrystalDiskInfo.
 It also decides how the app gets administrator rights.
 
 Exit test: the app shows the same values as `onyx health` on all three hosts.
+
+Result: done.
+`scripts/check-gui.py` starts the app with the MCP server of Slint and no
+display, presses the tab of each drive, and reads what the window shows. It
+compares the verdict, the confidence, the model, the serial number, the
+firmware, the temperature, and the hours with `onyx health --json` for the
+same drive. CI runs it on each host, and it passed in three runs in a row:
+two NVMe drives or two Hyper-V disks on Windows, a Hyper-V disk on Linux,
+and the virtual disk and eight disk images on macOS. On a MacBook Air it
+passed for the internal SSD.
+
+What the first run found: the app made a new model of the tabs each time a
+drive answered, so a tab that a person or a screen reader held went away.
+The app now changes the tabs in place.
+
+Not yet run: the button that reads a drive with administrator rights. It
+needs a person at the password dialog. Its command line and its quoting are
+tested, and a real shell gave the path back unchanged.
 
 ## P6: partition, format, and erase
 
