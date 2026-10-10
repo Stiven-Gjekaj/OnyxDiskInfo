@@ -19,7 +19,8 @@ const SHOWN: usize = 20;
 pub fn duration(micros: u64) -> String {
     let seconds = micros / 1_000_000;
     match seconds {
-        0..60 => format!("{}.{} s", seconds, micros % 1_000_000 / 100_000),
+        0 => format!("{} ms", micros / 1000),
+        1..60 => format!("{}.{} s", seconds, micros % 1_000_000 / 100_000),
         60..3600 => format!("{} min {} s", seconds / 60, seconds % 60),
         _ => format!("{} h {} min", seconds / 3600, seconds % 3600 / 60),
     }
@@ -400,6 +401,7 @@ mod tests {
 
     #[test]
     fn a_duration_reads_in_seconds_minutes_or_hours() {
+        assert_eq!(duration(93_000), "93 ms");
         assert_eq!(duration(1_500_000), "1.5 s");
         assert_eq!(duration(125_000_000), "2 min 5 s");
         assert_eq!(duration(7_384_000_000), "2 h 3 min");
