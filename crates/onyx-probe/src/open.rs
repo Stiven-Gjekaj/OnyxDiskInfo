@@ -91,9 +91,10 @@ pub fn open_test_file(path: &std::path::Path) -> Result<File> {
 /// that no list shows, such as one of the device mapper. Give back the file
 /// and its size.
 ///
-/// A block device opens with `O_EXCL` for a write, so the kernel refuses one
-/// that a file system or another program holds. That covers a root file
-/// system on LVM, which a person could otherwise name here. On macOS and on
+/// A block device opens with `O_DIRECT`, and with `O_EXCL` for a write, so
+/// the kernel refuses one that a file system or another program holds. That
+/// covers a root file system on LVM, which a person could otherwise name
+/// here. On macOS and on
 /// Windows a block device is refused: the drive list and its checks reach
 /// those.
 pub fn open_image(path: &std::path::Path, access: Access) -> Result<(File, u64)> {
@@ -110,10 +111,18 @@ pub fn open_image(path: &std::path::Path, access: Access) -> Result<(File, u64)>
     }
     let mut options = std::fs::OpenOptions::new();
     options.read(true).write(access == Access::Write);
+    // O_DIRECT for a block device: through the page cache, a block reads
+    // back from the address that it was written to, and a device that wraps
+    // looks genuine.
     #[cfg(target_os = "linux")]
-    if device && access == Access::Write {
+    if device {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_EXCL);
+        let exclusive = if access == Access::Write {
+            libc::O_EXCL
+        } else {
+            0
+        };
+        options.custom_flags(libc::O_DIRECT | exclusive);
     }
     let mut file = options.open(path).map_err(|e| {
         #[cfg(target_os = "linux")]
