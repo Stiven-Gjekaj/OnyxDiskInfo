@@ -93,6 +93,25 @@ def windows_drives():
     return drives
 
 
+def show_linux_serial_sources(name):
+    """Print where udev and the kernel keep a serial number, for a person
+    who reads why the two tools disagree."""
+    try:
+        props = run(["udevadm", "info", "--query=property", f"/dev/{name}"])
+        for line in props.splitlines():
+            if "SERIAL" in line or line.startswith("ID_WWN"):
+                print(f"  udev {line}")
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"  udevadm: {e}")
+    for leaf in ("serial", "wwid", "vpd_pg80", "vpd_pg83"):
+        path = f"/sys/block/{name}/device/{leaf}"
+        try:
+            with open(path, "rb") as f:
+                print(f"  {path}: {f.read()[:64]!r}")
+        except OSError as e:
+            print(f"  {path}: {e.strerror}")
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: check-list.py <path to onyx>")
@@ -122,6 +141,8 @@ def main():
                 continue
             if clean(mine[field]) != theirs[field]:
                 failures.append(f"{name}: {field} {mine[field]!r} and not {theirs[field]!r}")
+                if field == "serial" and platform.system() == "Linux":
+                    show_linux_serial_sources(name)
         print(f"{name}: {mine['name']}, {mine['size_bytes']} bytes, checked")
 
     if failures:
