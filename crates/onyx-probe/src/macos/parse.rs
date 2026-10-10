@@ -144,6 +144,7 @@ pub fn drive_from_media(
     let vendor = text("Vendor Name");
     let model = text("Product Name");
     let serial = text("Serial Number");
+    let firmware = text("Product Revision Level");
 
     let protocol = snapshot.find_dict(index, "Protocol Characteristics");
     let protocol_text = |key: &str| {
@@ -171,6 +172,7 @@ pub fn drive_from_media(
     info.vendor = vendor;
     info.model = model;
     info.serial = serial;
+    info.firmware = firmware;
     info.size_bytes = size;
     info.logical_sector_size = snapshot
         .get(index, "Preferred Block Size")
@@ -421,6 +423,33 @@ mod tests {
         assert_eq!(d.name, "SanDisk Ultra");
         assert_eq!(d.bus, Bus::Usb);
         assert_eq!(d.connection, Connection::External);
+    }
+
+    #[test]
+    fn the_firmware_comes_from_the_product_revision_level() {
+        let mut t = one_drive("disk0", 500_277_790_720, "Apple Fabric", "Internal");
+        t.nodes[0] = t.nodes[0].clone().with(
+            "Device Characteristics",
+            Value::Dict(BTreeMap::from([
+                (
+                    "Product Name".to_string(),
+                    Value::Text("APPLE SSD AP0512Z".to_string()),
+                ),
+                (
+                    "Product Revision Level".to_string(),
+                    Value::Text("532.140.2 ".to_string()),
+                ),
+            ])),
+        );
+        let d = drive_from_media(&t, 1, &BTreeSet::new()).unwrap();
+        assert_eq!(d.firmware.as_deref(), Some("532.140.2"));
+    }
+
+    #[test]
+    fn a_drive_with_no_revision_has_no_firmware() {
+        let t = one_drive("disk4", 32_010_928_128, "USB", "External");
+        let d = drive_from_media(&t, 1, &BTreeSet::new()).unwrap();
+        assert!(d.firmware.is_none());
     }
 
     #[test]
