@@ -10,6 +10,8 @@ authors.workspace = true
 
 [dependencies]
 onyx-core.workspace = true
+# The fallback reads the JSON that smartctl prints.
+serde_json.workspace = true
 
 
 # The bindings of one host never reach the other two. Each one is raw, so the

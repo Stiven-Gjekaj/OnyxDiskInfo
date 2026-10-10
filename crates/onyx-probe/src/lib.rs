@@ -16,6 +16,7 @@ mod health;
 pub mod linux;
 pub mod macos;
 pub mod sat;
+pub mod smartctl;
 pub mod windows;
 
 pub use health::RawHealth;
