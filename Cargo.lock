@@ -191,6 +191,16 @@ name = "onyx-core"
 version = "0.1.0"
 
 [[package]]
+name = "onyx-gui"
+version = "0.1.0"
+dependencies = [
+ "onyx",
+ "onyx-core",
+ "onyx-probe",
+ "serde_json",
+]
+
+[[package]]
 name = "onyx-probe"
 version = "0.1.0"
 dependencies = [
