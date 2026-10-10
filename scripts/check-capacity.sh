@@ -51,6 +51,9 @@ if fake["genuine"]:
     failures.append("the fake device passed as genuine")
 if fake["first_fault"] != "wraps":
     failures.append(f"the first fault is {fake['first_fault']}, not wraps")
+detail = fake["first_fault_detail"] or {}
+if fake["first_fault"] == "wraps" and detail["from"] - detail["onto"] != real:
+    failures.append(f"the drive wraps every {detail['from'] - detail['onto']}, not {real}")
 if not fake["proven_bytes"] <= real < fake["first_fault_offset"] + probe:
     failures.append(f"the real end {real} is not between {fake['proven_bytes']} "
                     f"and {fake['first_fault_offset'] + probe}")

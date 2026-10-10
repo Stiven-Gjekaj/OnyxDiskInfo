@@ -38,8 +38,10 @@ const MAGIC: &[u8; 8] = b"ONYXPROB";
 /// What one probe found.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fault {
-    /// The block read back with the mark of the block at this offset.
-    Wraps { onto: u64 },
+    /// The sector at `from` reads back with the data of the sector at
+    /// `onto`. On a drive that wraps by the remainder, `from - onto` is the
+    /// real size.
+    Wraps { from: u64, onto: u64 },
     /// The block read back as data that the test did not write.
     Dropped,
     /// The read failed.
@@ -90,36 +92,73 @@ pub fn probe_offsets(size: u64, sector: u32, probes: u64, block: u64) -> Vec<u64
     out
 }
 
-/// A small generator of bytes that no drive makes up by chance.
-pub(crate) fn fill(block: &mut [u8], run: u64, offset: u64) {
-    let mut state = run ^ offset.rotate_left(17) ^ 0x9e37_79b9_7f4a_7c15;
-    for chunk in block.chunks_mut(8) {
+/// The size of each marked sector. Every drive reads and writes in whole
+/// sectors of 512 bytes or more, so a mark in each 512 bytes survives any
+/// shift that a drive makes.
+const MARK_BYTES: usize = 512;
+
+/// Fill one sector: the mark, the run, the address of the sector, then bytes
+/// that no drive makes up by chance.
+fn fill_sector(sector: &mut [u8], run: u64, address: u64) {
+    let mut state = run ^ address.rotate_left(17) ^ 0x9e37_79b9_7f4a_7c15;
+    for chunk in sector.chunks_mut(8) {
         state ^= state << 13;
         state ^= state >> 7;
         state ^= state << 17;
         let bytes = state.to_le_bytes();
         chunk.copy_from_slice(&bytes[..chunk.len()]);
     }
-    block[0..8].copy_from_slice(MAGIC);
-    block[8..16].copy_from_slice(&run.to_le_bytes());
-    block[16..24].copy_from_slice(&offset.to_le_bytes());
+    if sector.len() >= 24 {
+        sector[0..8].copy_from_slice(MAGIC);
+        sector[8..16].copy_from_slice(&run.to_le_bytes());
+        sector[16..24].copy_from_slice(&address.to_le_bytes());
+    }
 }
 
-/// What a block that came back holds.
-fn judge(back: &[u8], expected: &[u8], run: u64) -> Option<Fault> {
+/// Fill a block that starts at `offset`. Each sector of 512 bytes carries
+/// its own address, so a sector that a drive puts in the wrong place says
+/// where it came from.
+pub(crate) fn fill(block: &mut [u8], run: u64, offset: u64) {
+    for (index, sector) in block.chunks_mut(MARK_BYTES).enumerate() {
+        fill_sector(sector, run, offset + (index * MARK_BYTES) as u64);
+    }
+}
+
+/// The address that a sector of this run holds, if it is a whole sector
+/// that this run wrote.
+fn origin(sector: &[u8], run: u64) -> Option<u64> {
+    let marked = sector.get(0..8) == Some(MAGIC.as_slice())
+        && sector.get(8..16) == Some(run.to_le_bytes().as_slice());
+    if !marked {
+        return None;
+    }
+    let mut address = [0u8; 8];
+    address.copy_from_slice(&sector[16..24]);
+    let address = u64::from_le_bytes(address);
+    let mut written = vec![0u8; sector.len()];
+    fill_sector(&mut written, run, address);
+    (sector == written.as_slice()).then_some(address)
+}
+
+/// What a block that came back from `offset` holds.
+///
+/// A sector of this run from another address means the drive wraps. Anything
+/// else that differs means the drive dropped the write.
+fn judge(back: &[u8], expected: &[u8], run: u64, offset: u64) -> Option<Fault> {
     if back == expected {
         return None;
     }
-    let marked = back.get(0..8) == Some(MAGIC.as_slice())
-        && back.get(8..16) == Some(run.to_le_bytes().as_slice());
-    if marked {
-        let mut onto = [0u8; 8];
-        onto.copy_from_slice(&back[16..24]);
-        let onto = u64::from_le_bytes(onto);
-        let mut written = vec![0u8; back.len()];
-        fill(&mut written, run, onto);
-        if back == written.as_slice() {
-            return Some(Fault::Wraps { onto });
+    for (index, (got, want)) in back
+        .chunks(MARK_BYTES)
+        .zip(expected.chunks(MARK_BYTES))
+        .enumerate()
+    {
+        if got == want {
+            continue;
+        }
+        if let Some(onto) = origin(got, run) {
+            let from = offset + (index * MARK_BYTES) as u64;
+            return Some(Fault::Wraps { from, onto });
         }
     }
     Some(Fault::Dropped)
@@ -160,7 +199,7 @@ pub fn test(device: &dyn Device, run: u64) -> io::Result<CapacityReport> {
         }
         fill(&mut expected, run, *offset);
         faults[index] = match device.read_at(buffer.bytes_mut(), *offset) {
-            Ok(()) => judge(buffer.bytes(), &expected, run),
+            Ok(()) => judge(buffer.bytes(), &expected, run, *offset),
             Err(e) => Some(Fault::ReadError(e.to_string())),
         };
     }
@@ -213,11 +252,20 @@ mod tests {
         fn sector_size(&self) -> u32 {
             self.real.sector_size()
         }
+        // Each sector wraps on its own, as the controller maps each address.
         fn read_at(&self, buffer: &mut [u8], offset: u64) -> io::Result<()> {
-            self.real.read_at(buffer, offset % self.real.size())
+            for (i, sector) in buffer.chunks_mut(512).enumerate() {
+                let at = (offset + i as u64 * 512) % self.real.size();
+                self.real.read_at(sector, at)?;
+            }
+            Ok(())
         }
         fn write_at(&self, buffer: &[u8], offset: u64) -> io::Result<()> {
-            self.real.write_at(buffer, offset % self.real.size())
+            for (i, sector) in buffer.chunks(512).enumerate() {
+                let at = (offset + i as u64 * 512) % self.real.size();
+                self.real.write_at(sector, at)?;
+            }
+            Ok(())
         }
         fn flush(&self) -> io::Result<()> {
             Ok(())
@@ -302,7 +350,7 @@ mod tests {
         assert!(!r.genuine());
         let (offset, fault) = r.first_fault.clone().unwrap();
         assert!(
-            matches!(fault, Fault::Wraps { onto } if onto == offset % real),
+            matches!(fault, Fault::Wraps { from, onto } if from - onto == real && from >= offset),
             "{fault:?}"
         );
         // The real end lies between what the test proved and the first fault.
@@ -313,6 +361,40 @@ mod tests {
         assert!(r.proven_bytes > real - 2 * 64 * MIB / 1023);
         // Three quarters of the probes sit past the real end.
         assert!(r.faults >= 760 && r.faults <= 770, "{}", r.faults);
+    }
+
+    #[test]
+    fn a_real_end_between_two_probes_still_reads_as_a_wrap() {
+        // The real end of a fake drive does not fall on the start of a probe.
+        // The first probe past it then reads back from the middle of a probe
+        // below, and each sector says where it came from.
+        let real = 16 * MIB + 7 * 512;
+        let d = Wrapping {
+            real: MemoryDevice::new(real as usize, 512),
+            claimed: 64 * MIB,
+        };
+        let r = test(&d, 42).unwrap();
+        let (offset, fault) = r.first_fault.clone().unwrap();
+        // The probe holds seven real sectors, and the eighth wraps to 0.
+        assert_eq!(
+            fault,
+            Fault::Wraps {
+                from: real,
+                onto: 0
+            },
+            "{r:?}"
+        );
+        assert!(r.proven_bytes <= real && real < offset + PROBE_BYTES);
+    }
+
+    #[test]
+    fn each_sector_carries_its_own_address() {
+        let mut block = vec![0u8; 2048];
+        fill(&mut block, 5, 1_048_576);
+        for (index, sector) in block.chunks(512).enumerate() {
+            assert_eq!(origin(sector, 5), Some(1_048_576 + index as u64 * 512));
+            assert_eq!(origin(sector, 6), None, "another run does not count");
+        }
     }
 
     #[test]
@@ -344,9 +426,10 @@ mod tests {
     fn a_block_from_an_older_run_does_not_count() {
         let mut old = vec![0u8; PROBE_BYTES as usize];
         fill(&mut old, 1, 4096);
+        assert!(origin(&old[..512], 1).is_some());
         let mut expected = vec![0u8; PROBE_BYTES as usize];
         fill(&mut expected, 2, 0);
-        assert_eq!(judge(&old, &expected, 2), Some(Fault::Dropped));
+        assert_eq!(judge(&old, &expected, 2, 0), Some(Fault::Dropped));
     }
 
     #[test]

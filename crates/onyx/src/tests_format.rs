@@ -234,9 +234,11 @@ pub fn bench_json(target: &str, reads: &[JobResult], writes: &[JobResult]) -> Js
 
 fn fault_text(fault: &Fault) -> String {
     match fault {
-        Fault::Wraps { onto } => format!(
-            "it reads back with the data of byte {}, so the drive wraps",
-            grouped(*onto)
+        Fault::Wraps { from, onto } => format!(
+            "byte {} reads back with the data of byte {}, so the drive wraps every {}",
+            grouped(*from),
+            grouped(*onto),
+            human_size(from - onto)
         ),
         Fault::Dropped => "it reads back as data that the test did not write".to_string(),
         Fault::ReadError(e) => format!("the read failed: {e}"),
@@ -292,7 +294,13 @@ pub fn capacity_json(drive: &DriveInfo, r: &CapacityReport) -> Json {
         None => (Json::Null, Json::Null, Json::Null),
         Some((offset, fault)) => {
             let (kind, detail) = match fault {
-                Fault::Wraps { onto } => ("wraps", Json::Number((*onto).into())),
+                Fault::Wraps { from, onto } => (
+                    "wraps",
+                    Json::Object(vec![
+                        ("from", Json::Number((*from).into())),
+                        ("onto", Json::Number((*onto).into())),
+                    ]),
+                ),
                 Fault::Dropped => ("dropped", Json::Null),
                 Fault::ReadError(e) => ("read_error", Json::text(e)),
                 Fault::WriteError(e) => ("write_error", Json::text(e)),
@@ -496,7 +504,13 @@ mod tests {
         let r = CapacityReport {
             claimed: 128_000_000_000,
             probes: 1024,
-            first_fault: Some((32_031_000_000, Fault::Wraps { onto: 31_000_000 })),
+            first_fault: Some((
+                32_031_000_000,
+                Fault::Wraps {
+                    from: 32_031_000_000,
+                    onto: 31_000_000,
+                },
+            )),
             faults: 768,
             proven_bytes: 31_906_000_000,
             restored: true,
@@ -509,11 +523,18 @@ mod tests {
                     .starts_with("FAKE. The drive holds at least 31.9 GB and less than 32.0 GB")),
             "{lines:#?}"
         );
-        assert!(lines.iter().any(|l| l.contains("so the drive wraps")));
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("so the drive wraps every 32.0 GB")),
+            "{lines:#?}"
+        );
         let json = capacity_json(&drive(), &r).to_string();
         assert!(json.contains(r#""genuine":false"#));
         assert!(
-            json.contains(r#""first_fault":"wraps","first_fault_detail":31000000"#),
+            json.contains(
+                r#""first_fault":"wraps","first_fault_detail":{"from":32031000000,"onto":31000000}"#
+            ),
             "{json}"
         );
     }
