@@ -1,0 +1,7 @@
+# Each contributor and the CI build with the same compiler. A new version of
+# Rust can add a lint that clippy then refuses, so a change of version is a
+# commit of its own.
+[toolchain]
+channel = "1.97.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
