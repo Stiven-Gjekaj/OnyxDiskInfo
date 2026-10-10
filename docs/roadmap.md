@@ -11,7 +11,8 @@ Each phase has a goal, the work in it, and an exit test.
 Do not start a phase until the phase it depends on passes its exit test.
 Each phase is many small commits.
 
-P0 is done. CI passes on Windows, on macOS, and on Linux. P1 is next.
+P0 and P1 are done. `onyx list` runs on Windows, on macOS, and on Linux.
+P2 is next.
 
 ```mermaid
 flowchart LR
@@ -51,7 +52,19 @@ the transport.
 It covers internal, USB, SD, and NVMe drives.
 
 Exit test: on each host, `onyx list --json` agrees with the host tool.
-The host tools are `diskutil list`, `lsblk`, and `Get-PhysicalDisk`.
+The host tools are `diskutil`, `lsblk`, and `Get-Disk`.
+`scripts/check-list.py` makes the comparison, and CI runs it on each host.
+
+Result: done.
+The set of drives and the size of each drive agree on all three hosts.
+The serial number and the firmware agree on Linux and on Windows.
+`diskutil` gives neither, so on macOS they were compared by hand with
+`system_profiler`, on one Mac with an internal SSD and three USB sticks.
+Five CI runs passed, on Hyper-V SCSI and NVMe disks and on macOS disk images.
+
+Open: one Linux runner gave the serial `2` from its virtual disk, and `lsblk`
+gave the NAA name. That runner did not come back in four later runs.
+The script prints the sources of the serial when this happens again.
 
 ## P2: ATA and NVMe health
 
