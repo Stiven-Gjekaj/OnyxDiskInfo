@@ -100,6 +100,12 @@ The toolchain version is in [rust-toolchain.toml](rust-toolchain.toml).
 OnyxDiskInfo has no connection to CrystalDiskInfo or to its author.
 CrystalDiskInfo is the model for the health view, and nothing more.
 
+## Support
+
+If you find OnyxDiskInfo useful, you can support its development here.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U1G623RXOE)
+
 ## License
 
 MIT. See [LICENSE](LICENSE) and [TERMS.md](TERMS.md).
