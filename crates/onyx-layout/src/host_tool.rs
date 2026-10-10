@@ -115,10 +115,11 @@ fn host_name(host: Host) -> &'static str {
 pub fn check(fs: HostFs, table: Table, host: Host) -> Result<()> {
     if !fs.hosts().contains(&host) {
         let names: Vec<&str> = fs.hosts().iter().map(|h| host_name(*h)).collect();
+        let verb = if names.len() == 1 { "has" } else { "have" };
         return Err(Error::host(
             "format",
             format!(
-                "{} has no tool that writes {}. {} has one.",
+                "{} has no tool that writes {}. {} {verb} one.",
                 host_name(host),
                 fs.name(),
                 names.join(" and ")
@@ -239,7 +240,7 @@ mod tests {
             "{e}"
         );
         let e = check(HostFs::Ntfs, Table::Gpt, Host::Macos).unwrap_err();
-        assert!(e.to_string().contains("Linux and Windows"), "{e}");
+        assert!(e.to_string().contains("Linux and Windows have one."), "{e}");
     }
 
     #[test]
