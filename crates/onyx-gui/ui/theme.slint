@@ -7,7 +7,8 @@ import { Palette } from "std-widgets.slint";
 export enum Verdict { good, caution, bad, unknown }
 
 export global Theme {
-    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+    // The scheme of the system, which a setting or a test can override.
+    in-out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
 
     // Type.
     out property <length> font-size: 13px;
