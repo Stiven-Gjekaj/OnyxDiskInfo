@@ -6,6 +6,7 @@
 use clap::Parser;
 
 pub mod cli;
+pub mod disk_tests;
 pub mod format;
 pub mod health;
 pub mod json;
@@ -13,7 +14,7 @@ pub mod list;
 pub mod report;
 pub mod tests_format;
 
-use cli::{Cli, Command};
+use cli::{Cli, Command, TestCommand};
 
 /// Run the command that the person typed, and give the exit code.
 ///
@@ -23,6 +24,34 @@ pub fn run() -> i32 {
     let result = match cli.command {
         Command::List { json } => list::run(json),
         Command::Health { drive, json } => health::run(drive, json),
+        Command::Scan { drive, json } => disk_tests::run_scan(drive, json),
+        Command::Bench {
+            drive,
+            file,
+            size_mib,
+            seconds,
+            json,
+        } => match (drive, file) {
+            (_, Some(path)) => {
+                disk_tests::run_bench_file(&path, size_mib.unwrap_or(1024), seconds, json)
+            }
+            (Some(number), None) => disk_tests::run_bench_drive(number, seconds, json),
+            (None, None) => unreachable!("clap requires a drive or a file"),
+        },
+        Command::Test { test } => match test {
+            TestCommand::Capacity { target } => disk_tests::run_capacity(
+                target.drive,
+                target.force,
+                target.confirm.as_deref(),
+                target.json,
+            ),
+            TestCommand::Write { target } => disk_tests::run_write(
+                target.drive,
+                target.force,
+                target.confirm.as_deref(),
+                target.json,
+            ),
+        },
     };
     match result {
         Ok(code) => code,
