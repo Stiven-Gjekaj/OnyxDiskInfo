@@ -247,6 +247,7 @@ pub fn drive_from_raw(raw: &RawDisk, system: &BTreeSet<u32>) -> Result<DriveInfo
     info.vendor = descriptor.vendor;
     info.model = descriptor.product;
     info.serial = descriptor.serial;
+    info.firmware = descriptor.revision;
     info.size_bytes = geometry.disk_size;
     info.logical_sector_size = alignment
         .map(|a| a.bytes_per_logical_sector)
@@ -445,6 +446,26 @@ mod tests {
             write_protected: false,
             attributes: None,
         }
+    }
+
+    #[test]
+    fn the_firmware_comes_from_the_product_revision() {
+        let mut disk = raw(0, "", "Samsung SSD 990 PRO 2TB", false, 0x11, 1024);
+        let bytes = &mut disk.device_descriptor;
+        let at = bytes.len() as u32;
+        bytes.extend_from_slice(b"4B2QJXD7\0");
+        bytes[20..24].copy_from_slice(&at.to_le_bytes());
+        let size = bytes.len() as u32;
+        bytes[4..8].copy_from_slice(&size.to_le_bytes());
+        let d = drive_from_raw(&disk, &BTreeSet::new()).unwrap();
+        assert_eq!(d.firmware.as_deref(), Some("4B2QJXD7"));
+    }
+
+    #[test]
+    fn a_descriptor_with_no_revision_gives_no_firmware() {
+        let disk = raw(0, "", "Samsung SSD 990 PRO 2TB", false, 0x11, 1024);
+        let d = drive_from_raw(&disk, &BTreeSet::new()).unwrap();
+        assert!(d.firmware.is_none());
     }
 
     /// The answer to `IOCTL_DISK_GET_DISK_ATTRIBUTES` with these attributes.
