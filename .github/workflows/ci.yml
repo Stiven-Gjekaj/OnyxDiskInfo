@@ -51,6 +51,12 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
+      # Slint draws its text through fontconfig and reads the keyboard through
+      # xkbcommon on Linux, and the desktop app needs both to build.
+      - name: install the libraries of Slint on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libxkbcommon-dev
+
       # Clippy compiles the tests as well, so it reports what rustc reports.
       # RUSTFLAGS stays unset, so this step and the next share one build.
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -116,6 +122,20 @@ jobs:
       - name: find a fake drive on Linux
         if: runner.os == 'Linux'
         run: sudo scripts/check-capacity.sh target/debug/onyx
+      # The exit test of P5. The app runs with no display, with the MCP
+      # server of Slint, and the script compares what it shows with what
+      # onyx prints for each drive. Both run with the same rights.
+      - name: build the desktop app with the MCP server
+        env:
+          SLINT_EMIT_DEBUG_INFO: "1"
+        run: cargo build -p onyx-gui -p onyx --features slint/mcp --locked
+      - name: compare the desktop app with onyx on Linux and macOS
+        if: runner.os != 'Windows'
+        run: sudo python3 scripts/check-gui.py target/debug/OnyxDiskInfo target/debug/onyx --headless
+      - name: compare the desktop app with onyx on Windows
+        if: runner.os == 'Windows'
+        run: python scripts/check-gui.py target/debug/OnyxDiskInfo.exe target/debug/onyx.exe --headless
+
       - name: compare the benchmarks with fio on Linux
         if: runner.os == 'Linux'
         run: |
