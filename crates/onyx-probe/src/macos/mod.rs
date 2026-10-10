@@ -3,6 +3,8 @@
 #[cfg(target_os = "macos")]
 pub mod host;
 pub mod model;
+#[cfg(target_os = "macos")]
+pub mod open;
 pub mod parse;
 #[cfg(target_os = "macos")]
 pub mod smart;

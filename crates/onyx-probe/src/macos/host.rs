@@ -52,7 +52,7 @@ impl DriveList for MacosDrives {
 ///
 /// `IOServiceMatching` takes the subclasses too, so an APFS container arrives
 /// here as well as a plain disk.
-fn snapshot() -> Result<RegistrySnapshot> {
+pub(crate) fn snapshot() -> Result<RegistrySnapshot> {
     let mut out = RegistrySnapshot::default();
     let class = CString::new("IOMedia").expect("a literal holds no zero byte");
 

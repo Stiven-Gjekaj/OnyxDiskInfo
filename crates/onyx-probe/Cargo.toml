@@ -25,6 +25,8 @@ libc = "=0.2.190"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "=0.10.1"
 core-foundation-sys = "=0.8.7"
+# getmntinfo lists the mounts that hold a drive before a test writes it.
+libc = "=0.2.190"
 io-kit-sys = "=0.4.1"
 
 [target.'cfg(windows)'.dependencies]

@@ -2,6 +2,8 @@
 
 #[cfg(windows)]
 pub mod host;
+#[cfg(windows)]
+pub mod open;
 pub mod parse;
 pub mod passthru;
 pub mod raw;

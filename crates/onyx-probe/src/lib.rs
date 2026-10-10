@@ -15,12 +15,14 @@ use onyx_core::{DriveInfo, DriveList, Error, Record, Result};
 mod health;
 pub mod linux;
 pub mod macos;
+pub mod open;
 pub mod sample;
 pub mod sat;
 pub mod smartctl;
 pub mod windows;
 
 pub use health::{RawHealth, source_of};
+pub use open::{Access, OpenDrive, open_drive};
 
 /// The drive list of the host that this build runs on.
 ///

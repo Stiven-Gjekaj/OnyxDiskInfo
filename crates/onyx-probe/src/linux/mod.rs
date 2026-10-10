@@ -6,6 +6,8 @@
 
 #[cfg(target_os = "linux")]
 pub mod host;
+#[cfg(target_os = "linux")]
+pub mod open;
 pub mod parse;
 pub mod passthru;
 #[cfg(target_os = "linux")]
