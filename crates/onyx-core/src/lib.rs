@@ -11,9 +11,11 @@ mod error;
 pub mod health;
 mod listing;
 pub mod nvme;
+mod report;
 mod size;
 
 pub use drive::{Bus, Connection, DriveId, DriveInfo};
 pub use error::{Error, Result};
 pub use listing::{DriveList, by_index, in_list_order, natural_cmp};
+pub use report::Report;
 pub use size::{grouped, human_size, size_column};
