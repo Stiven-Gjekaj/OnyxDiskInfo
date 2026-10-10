@@ -594,6 +594,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "burnout-core"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b7221bef3f3e9ceb332f003356be62bd5e1a5837b9b9697d3425335bc5b4e19"
+
+[[package]]
 name = "by_address"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3284,6 +3290,7 @@ dependencies = [
 name = "onyx-layout"
 version = "0.1.0"
 dependencies = [
+ "burnout-core",
  "onyx-core",
 ]
 

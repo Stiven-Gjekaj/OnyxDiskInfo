@@ -8,3 +8,6 @@
 
 mod crc32;
 pub mod table;
+mod target;
+
+pub use target::DriveTarget;

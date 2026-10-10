@@ -10,6 +10,8 @@ authors.workspace = true
 
 [dependencies]
 onyx-core.workspace = true
+# The target that takes whole sectors, which the writers of Burnout take.
+burnout-core.workspace = true
 
 [lints]
 workspace = true
