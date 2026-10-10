@@ -57,11 +57,16 @@ def linux_drives():
 
 
 def macos_drives():
-    listing = plistlib.loads(run(["diskutil", "list", "-plist", "physical"]).encode())
+    listing = plistlib.loads(run(["diskutil", "list", "-plist"]).encode())
     drives = {}
     for name in listing["WholeDisks"]:
         info = plistlib.loads(run(["diskutil", "info", "-plist", name]).encode())
         if info.get("TotalSize", 0) == 0:
+            continue
+        # An APFS container is a whole disk to diskutil, and it is not a
+        # drive. It sits on the drive that its physical store names. A disk
+        # image stays in, because Onyx lists it as a virtual drive.
+        if "APFSPhysicalStores" in info:
             continue
         # diskutil gives no serial and no firmware. system_profiler does, and
         # a person checks those by hand.
@@ -74,7 +79,8 @@ def windows_drives():
         "Get-Disk | Select-Object Number, Size, SerialNumber, FirmwareVersion"
         " | ConvertTo-Json -AsArray"
     )
-    out = json.loads(run(["powershell", "-NoProfile", "-Command", script]))
+    # `-AsArray` needs PowerShell 7, which is `pwsh` and not `powershell`.
+    out = json.loads(run(["pwsh", "-NoProfile", "-Command", script]))
     drives = {}
     for d in out:
         if int(d["Size"]) == 0:
