@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod crc32;
+pub mod fs;
 pub mod table;
 mod target;
 

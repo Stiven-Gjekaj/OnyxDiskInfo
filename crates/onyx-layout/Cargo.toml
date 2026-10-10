@@ -12,6 +12,11 @@ authors.workspace = true
 onyx-core.workspace = true
 # The target that takes whole sectors, which the writers of Burnout take.
 burnout-core.workspace = true
+# Burnout writes FAT32 and exFAT, and three hosts check what it writes in its
+# CI. Onyx uses the same writers.
+burnout-layout.workspace = true
+# FAT12 and FAT16, which Burnout does not write.
+fatfs.workspace = true
 
 [lints]
 workspace = true
