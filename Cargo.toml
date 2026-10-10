@@ -16,6 +16,7 @@ authors = ["Stiven Gjekaj <stivenagostingjekaj@gmail.com>"]
 onyx = { path = "crates/onyx" }
 onyx-bench = { path = "crates/onyx-bench" }
 onyx-core = { path = "crates/onyx-core" }
+onyx-layout = { path = "crates/onyx-layout" }
 onyx-probe = { path = "crates/onyx-probe" }
 anyhow = "=1.0.104"
 clap = { version = "=4.6.6", features = ["derive"] }

@@ -3281,6 +3281,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "onyx-layout"
+version = "0.1.0"
+dependencies = [
+ "onyx-core",
+]
+
+[[package]]
 name = "onyx-probe"
 version = "0.1.0"
 dependencies = [

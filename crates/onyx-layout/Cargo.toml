@@ -1,0 +1,15 @@
+[package]
+name = "onyx-layout"
+description = "The partition tables and the file systems that Onyx writes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+onyx-core.workspace = true
+
+[lints]
+workspace = true
