@@ -10,6 +10,7 @@
 use std::fmt;
 
 use crate::ata::{self, Smart};
+use crate::emmc::{self, Life};
 use crate::nvme::{HealthLog, critical};
 
 /// The word for the health of a drive.
@@ -201,6 +202,40 @@ pub fn nvme(log: &HealthLog) -> Assessment {
     out
 }
 
+/// Assess an eMMC chip from its life estimates.
+///
+/// - Bad: the reserve is urgent, or an estimate is past the rated life.
+/// - Caution: the reserve gives a warning, or an estimate is at 90 percent
+///   or more, the same point as for an NVMe drive.
+pub fn emmc(life: &Life) -> Assessment {
+    let mut out = Assessment::new();
+    match life.pre_eol {
+        Some(3) => out.add(
+            Verdict::Bad,
+            "The chip says that its reserve blocks are almost gone.".to_string(),
+        ),
+        Some(2) => out.add(
+            Verdict::Caution,
+            "The chip has used 80 percent of its reserve blocks.".to_string(),
+        ),
+        _ => {}
+    }
+    for (area, step) in [("SLC", life.type_a), ("MLC", life.type_b)] {
+        match step {
+            Some(emmc::PAST_RATED_LIFE) => out.add(
+                Verdict::Bad,
+                format!("The {area} area is past its rated life."),
+            ),
+            Some(10) => out.add(
+                Verdict::Caution,
+                format!("The {area} area has used 90 to 100 percent of its rated life."),
+            ),
+            _ => {}
+        }
+    }
+    out
+}
+
 /// The attributes that count damaged sectors. Any count above zero gets a
 /// caution, because each one is a sector that held data and failed.
 const SECTOR_COUNTS: [u8; 3] = [
@@ -370,6 +405,34 @@ mod tests {
         // zero here, and the drive is still good.
         let a = ata(&smart_with(|s| s.attributes[1].current = 0));
         assert_eq!(a.verdict, Verdict::Good, "{:?}", a.reasons);
+    }
+
+    fn life(a: u8, b: u8, eol: u8) -> Life {
+        emmc::from_sysfs(
+            Some(&format!("{a:#04x} {b:#04x}")),
+            Some(&format!("{eol:#04x}")),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_young_emmc_chip_is_good() {
+        assert_eq!(emmc(&life(1, 2, 1)).verdict, Verdict::Good);
+        assert_eq!(emmc(&life(9, 9, 1)).verdict, Verdict::Good);
+    }
+
+    #[test]
+    fn an_emmc_chip_near_the_end_is_a_caution() {
+        assert_eq!(emmc(&life(10, 1, 1)).verdict, Verdict::Caution);
+        assert_eq!(emmc(&life(1, 1, 2)).verdict, Verdict::Caution);
+    }
+
+    #[test]
+    fn an_emmc_chip_past_the_end_or_urgent_is_bad() {
+        assert_eq!(emmc(&life(1, 11, 1)).verdict, Verdict::Bad);
+        let a = emmc(&life(1, 1, 3));
+        assert_eq!(a.verdict, Verdict::Bad);
+        assert_eq!(a.reasons.len(), 1);
     }
 
     #[test]
