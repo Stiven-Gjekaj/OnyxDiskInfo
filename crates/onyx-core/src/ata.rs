@@ -161,6 +161,29 @@ pub struct Attribute {
 }
 
 impl Attribute {
+    /// Build an attribute from values that another tool decoded.
+    ///
+    /// The raw value keeps its lowest 48 bits, the six bytes of the table.
+    pub fn new(
+        id: u8,
+        flags: u16,
+        current: u8,
+        worst: u8,
+        raw: u64,
+        threshold: Option<u8>,
+    ) -> Self {
+        let mut bytes = [0u8; 6];
+        bytes.copy_from_slice(&raw.to_le_bytes()[..6]);
+        Attribute {
+            id,
+            flags,
+            current,
+            worst,
+            raw: bytes,
+            threshold,
+        }
+    }
+
     /// The raw value as one number of 48 bits.
     ///
     /// This is the reading that `smartctl` shows by default. Some attributes
@@ -540,6 +563,13 @@ pub(crate) mod tests {
         let (data, _) = smart_blocks();
         let s = smart(&data, None).unwrap();
         assert!(s.attributes.iter().all(|a| a.threshold.is_none()));
+    }
+
+    #[test]
+    fn an_attribute_built_from_values_keeps_48_bits_of_its_raw_value() {
+        let a = Attribute::new(9, 0x32, 95, 95, 0x00ff_1122_3344_5566, Some(0));
+        assert_eq!(a.raw48(), 0x1122_3344_5566);
+        assert_eq!(a.raw, [0x66, 0x55, 0x44, 0x33, 0x22, 0x11]);
     }
 
     #[test]
