@@ -12,9 +12,12 @@
 
 use onyx_core::{DriveList, Result};
 
+mod health;
 pub mod linux;
 pub mod macos;
 pub mod windows;
+
+pub use health::RawHealth;
 
 /// The drive list of the host that this build runs on.
 ///
