@@ -19,6 +19,11 @@ pub enum RawHealth {
         smart: Vec<u8>,
         thresholds: Option<Vec<u8>>,
     },
+    /// The two `sysfs` files of an eMMC chip, as text.
+    Emmc {
+        life_time: Option<String>,
+        pre_eol_info: Option<String>,
+    },
 }
 
 impl RawHealth {
@@ -31,6 +36,10 @@ impl RawHealth {
                 smart,
                 thresholds,
             } => Report::ata(identify, smart, thresholds.as_deref()),
+            RawHealth::Emmc {
+                life_time,
+                pre_eol_info,
+            } => Report::emmc(life_time.as_deref(), pre_eol_info.as_deref()),
         }
     }
 }

@@ -61,6 +61,20 @@ pub fn read_health(drive: &DriveInfo) -> Result<RawHealth> {
         if drive.bus == onyx_core::Bus::Nvme {
             return linux::smart::nvme_health(&drive.node);
         }
+        if drive.bus == onyx_core::Bus::Mmc {
+            let (life_time, pre_eol_info) =
+                linux::parse::emmc_life(&linux::host::RealSysfs, drive.id.as_str());
+            if life_time.is_none() && pre_eol_info.is_none() {
+                return Err(Error::NoHealthData {
+                    name: drive.name.clone(),
+                    reason: "the card gives no life estimate".to_string(),
+                });
+            }
+            return Ok(RawHealth::Emmc {
+                life_time,
+                pre_eol_info,
+            });
+        }
         linux::smart::ata_health(&drive.node)?.ok_or_else(|| Error::NoHealthData {
             name: drive.name.clone(),
             reason: "the drive refused ATA PASS-THROUGH".to_string(),

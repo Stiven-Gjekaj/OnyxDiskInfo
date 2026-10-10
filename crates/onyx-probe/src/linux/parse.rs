@@ -183,6 +183,15 @@ pub fn identity(
     (at("vendor"), model, serial)
 }
 
+/// The two files where the kernel shows the wear of an eMMC chip.
+///
+/// An SD card has neither file, and neither has an eMMC chip older than
+/// version 5.0 of the standard.
+pub fn emmc_life(fs: &dyn SysfsSource, name: &str) -> (Option<String>, Option<String>) {
+    let at = |leaf: &str| attribute(fs, &format!("{BLOCK}/{name}/device/{leaf}"));
+    (at("life_time"), at("pre_eol_info"))
+}
+
 /// The world wide name of a drive with no serial number.
 ///
 /// A virtual disk of Hyper-V gives no page 0x80. udev then takes the NAA name
@@ -1220,6 +1229,22 @@ mod tests {
             .bytes("/sys/block/sda/device/vpd_pg80", b"\x00\x80\x00\x04PAGE");
         let (_, _, serial) = identity(&fs, "sda");
         assert_eq!(serial.as_deref(), Some("FROMFILE"));
+    }
+
+    #[test]
+    fn an_emmc_chip_gives_its_two_life_files() {
+        let fs = MapSysfs::new()
+            .file("/sys/block/mmcblk0/device/life_time", "0x01 0x02\n")
+            .file("/sys/block/mmcblk0/device/pre_eol_info", "0x01\n");
+        assert_eq!(
+            emmc_life(&fs, "mmcblk0"),
+            (Some("0x01 0x02".to_string()), Some("0x01".to_string()))
+        );
+    }
+
+    #[test]
+    fn an_sd_card_gives_no_life_files() {
+        assert_eq!(emmc_life(&MapSysfs::new(), "mmcblk0"), (None, None));
     }
 
     #[test]
