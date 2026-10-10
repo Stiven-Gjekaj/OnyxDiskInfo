@@ -11,6 +11,7 @@ pub mod health;
 pub mod json;
 pub mod list;
 pub mod report;
+pub mod tests_format;
 
 use cli::{Cli, Command};
 
