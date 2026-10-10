@@ -6,7 +6,7 @@ use burnout_core::{BlockTarget, Window};
 use onyx_core::{Error, Result};
 
 use crate::fs::{self, FileSystem};
-use crate::table::{self, Extent, Identity, Table};
+use crate::table::{self, Extent, Identity, Kind, Table};
 
 /// What the person chose for the new layout.
 #[derive(Clone, Copy, Debug)]
@@ -22,30 +22,45 @@ fn burnout(error: burnout_core::Error) -> Error {
     Error::host("format", error.to_string())
 }
 
-/// Write the table, then the file system in its partition. This erases what
-/// the drive held. It gives the place of the partition.
-pub fn write<T: BlockTarget>(target: &mut T, layout: &Layout<'_>) -> Result<Extent> {
+/// Write a table with one empty partition of `kind`, and remove the old
+/// tables at both ends. A tool of the host writes the file system after it.
+/// It gives the place of the partition.
+pub fn write_table<T: BlockTarget>(
+    target: &mut T,
+    table: Table,
+    kind: Kind,
+    seed: u64,
+) -> Result<Extent> {
     let sector = target.logical_sector_size();
-    let id = Identity::from_seed(layout.seed);
-    let plan = table::plan(layout.table, layout.fs.kind(), target.length(), sector, id)?;
+    let id = Identity::from_seed(seed);
+    let plan = table::plan(table, kind, target.length(), sector, id)?;
     for w in &plan.writes {
         target.seek(SeekFrom::Start(w.offset))?;
         target.write_all(&w.bytes)?;
     }
     target.flush()?;
-    let Extent { start, length } = plan.partition;
+    target.sync().map_err(burnout)?;
+    Ok(plan.partition)
+}
+
+/// Write the table, then the file system in its partition. This erases what
+/// the drive held. It gives the place of the partition.
+pub fn write<T: BlockTarget>(target: &mut T, layout: &Layout<'_>) -> Result<Extent> {
+    let sector = target.logical_sector_size();
+    let partition = write_table(target, layout.table, layout.fs.kind(), layout.seed)?;
+    let Extent { start, length } = partition;
     let window = Window::new(&mut *target, start, length).map_err(burnout)?;
     fs::format(
         window,
         layout.fs,
         &fs::Options {
             label: layout.label,
-            serial: id.disk_signature,
+            serial: Identity::from_seed(layout.seed).disk_signature,
             first_sector: start / u64::from(sector),
         },
     )?;
     target.sync().map_err(burnout)?;
-    Ok(plan.partition)
+    Ok(partition)
 }
 
 #[cfg(test)]
@@ -115,6 +130,17 @@ mod tests {
         let boot = read(&mut t, u64::from(first) * 512, 512);
         assert_eq!(&boot[54..62], b"FAT16   ");
         assert_eq!(u32::from_le_bytes(boot[28..32].try_into().unwrap()), first);
+    }
+
+    #[test]
+    fn a_table_alone_leaves_the_partition_empty_for_the_host_tool() {
+        let mut t = MemoryTarget::new(64 * MIB, 512).unwrap();
+        t.seek(SeekFrom::Start(MIB)).unwrap();
+        t.write_all(&[0xAB; 512]).unwrap();
+        let part = write_table(&mut t, Table::Mbr, Kind::Linux, 3).unwrap();
+        assert_eq!(read(&mut t, 0, 512)[450], 0x83);
+        // The old bytes in the partition stay. mkfs writes over them.
+        assert_eq!(read(&mut t, part.start, 512), vec![0xAB; 512]);
     }
 
     #[test]
