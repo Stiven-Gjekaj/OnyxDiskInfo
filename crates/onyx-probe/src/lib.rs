@@ -15,6 +15,7 @@ use onyx_core::{DriveInfo, DriveList, Error, Result};
 mod health;
 pub mod linux;
 pub mod macos;
+pub mod sample;
 pub mod sat;
 pub mod smartctl;
 pub mod windows;
