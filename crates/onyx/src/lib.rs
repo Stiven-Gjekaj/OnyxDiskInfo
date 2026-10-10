@@ -39,18 +39,8 @@ pub fn run() -> i32 {
             (None, None) => unreachable!("clap requires a drive or a file"),
         },
         Command::Test { test } => match test {
-            TestCommand::Capacity { target } => disk_tests::run_capacity(
-                target.drive,
-                target.force,
-                target.confirm.as_deref(),
-                target.json,
-            ),
-            TestCommand::Write { target } => disk_tests::run_write(
-                target.drive,
-                target.force,
-                target.confirm.as_deref(),
-                target.json,
-            ),
+            TestCommand::Capacity { target } => disk_tests::run_capacity(&target),
+            TestCommand::Write { target } => disk_tests::run_write(&target),
         },
     };
     match result {

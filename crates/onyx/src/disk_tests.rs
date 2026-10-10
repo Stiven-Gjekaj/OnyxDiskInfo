@@ -6,11 +6,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use onyx_bench::bench::{self, JOBS, JobResult};
 use onyx_bench::{Device, FileDevice, capacity, scan, verify};
+use onyx_core::DriveId;
 use onyx_core::{
     DriveInfo, Error, Force, Result, by_index, check_same_drive, check_target, describe,
     force_phrase, human_size, in_list_order, phrase_matches,
 };
-use onyx_probe::{Access, OpenDrive, open_drive, open_test_file};
+use onyx_probe::{Access, open_drive, open_image, open_test_file};
+
+use crate::cli::WriteTarget;
 
 use crate::tests_format as format;
 
@@ -25,9 +28,9 @@ fn find(number: usize) -> Result<DriveInfo> {
 }
 
 /// A device on a drive that is open.
-fn device(drive: &DriveInfo, open: &OpenDrive) -> Result<FileDevice> {
+fn device(drive: &DriveInfo, file: &std::fs::File) -> Result<FileDevice> {
     Ok(FileDevice::new(
-        open.file.try_clone()?,
+        file.try_clone()?,
         drive.size_bytes,
         drive.logical_sector_size,
     ))
@@ -81,7 +84,7 @@ impl Meter {
 pub fn run_scan(number: usize, json: bool) -> Result<i32> {
     let drive = find(number)?;
     let open = open_drive(&drive, Access::Read)?;
-    let device = device(&drive, &open)?;
+    let device = device(&drive, &open.file)?;
     let mut meter = Meter::new();
     let report = scan::scan(&device, |p| {
         meter.show("Reading", p.done_bytes, p.total_bytes, p.failed_blocks);
@@ -131,7 +134,7 @@ fn run_jobs(
 pub fn run_bench_drive(number: usize, seconds: u64, json: bool) -> Result<i32> {
     let drive = find(number)?;
     let open = open_drive(&drive, Access::Read)?;
-    let device = device(&drive, &open)?;
+    let device = device(&drive, &open.file)?;
     let span = bench::SPAN_BYTES.min(drive.size_bytes);
     let (reads, _) = run_jobs(&device, span, seconds, false)?;
     if json {
@@ -202,29 +205,19 @@ pub fn run_bench_file(path: &Path, size_mib: u64, seconds: u64, json: bool) -> R
     Ok(0)
 }
 
-/// Check the drive, ask for the phrase, and open the drive for a test that
-/// writes.
+/// Ask the person for the phrase that names the drive.
 ///
 /// The phrase comes from `--confirm`, or from the person at the terminal.
 /// A script that gives no phrase gets an error and not a prompt that waits.
-fn open_for_write(
-    number: usize,
-    force: bool,
-    confirm: Option<&str>,
-    what: &str,
-) -> Result<(DriveInfo, OpenDrive)> {
-    let drive = find(number)?;
-    let force = if force { Force::Yes } else { Force::No };
-    check_target(&drive, force)?;
-
-    let phrase = force_phrase(&drive);
+fn confirm(drive: &DriveInfo, confirm: Option<&str>, what: &str) -> Result<()> {
+    let phrase = force_phrase(drive);
     let typed = match confirm {
         Some(typed) => typed.to_string(),
         None => {
             if !io::stdin().is_terminal() {
-                return Err(Error::NotConfirmed);
+                return Err(Error::NeedsConfirmation { phrase });
             }
-            eprintln!("{what} writes to {}.", describe(&drive));
+            eprintln!("{what} writes to {}.", describe(drive));
             eprintln!("Type this to go on: {phrase}");
             eprint!("> ");
             let _ = io::stderr().flush();
@@ -233,32 +226,70 @@ fn open_for_write(
             line
         }
     };
-    if !phrase_matches(&typed, &drive) {
+    if !phrase_matches(&typed, drive) {
         return Err(Error::NotConfirmed);
     }
+    Ok(())
+}
+
+/// What a test that writes holds open: the drive or the image, and on
+/// Windows the locks on its volumes.
+struct Target {
+    drive: DriveInfo,
+    file: std::fs::File,
+    _open: Option<onyx_probe::OpenDrive>,
+}
+
+/// Check the target, ask for the phrase, and open it for a test that writes.
+fn open_for_write(target: &WriteTarget, what: &str) -> Result<Target> {
+    if let Some(path) = &target.image {
+        let (file, size) = open_image(path, Access::Write)?;
+        // The file name is what the person reads and types. The whole path
+        // stays as the identifier.
+        let full = path.display().to_string();
+        let name = path
+            .file_name()
+            .map_or(full.clone(), |n| n.to_string_lossy().into_owned());
+        let mut drive = DriveInfo::new(DriveId::new(full.clone()), full, name);
+        drive.size_bytes = size;
+        confirm(&drive, target.confirm.as_deref(), what)?;
+        return Ok(Target {
+            drive,
+            file,
+            _open: None,
+        });
+    }
+    let number = target.drive.unwrap_or(0);
+    let drive = find(number)?;
+    let force = if target.force { Force::Yes } else { Force::No };
+    check_target(&drive, force)?;
+    confirm(&drive, target.confirm.as_deref(), what)?;
 
     // The list again, in case a drive came or went while the person typed.
     let again = find(number)?;
     check_same_drive(&drive, &again)?;
     let open = open_drive(&drive, Access::Write)?;
-    Ok((drive, open))
+    Ok(Target {
+        drive,
+        file: open.file.try_clone()?,
+        _open: Some(open),
+    })
 }
 
 /// `onyx test capacity`: does the drive hold what it claims?
-pub fn run_capacity(number: usize, force: bool, confirm: Option<&str>, json: bool) -> Result<i32> {
-    let (drive, open) = open_for_write(
-        number,
-        force,
-        confirm,
+pub fn run_capacity(target: &WriteTarget) -> Result<i32> {
+    let opened = open_for_write(
+        target,
         "The capacity test saves 64 MiB of the drive, writes over it, and puts it back. It",
     )?;
-    let device = device(&drive, &open)?;
+    let (drive, json) = (&opened.drive, target.json);
+    let device = device(drive, &opened.file)?;
     eprintln!("Writing {} probes", capacity::PROBES);
     let report = capacity::test(&device, run_mark())?;
     if json {
-        println!("{}", format::capacity_json(&drive, &report));
+        println!("{}", format::capacity_json(drive, &report));
     } else {
-        for line in format::capacity_text(&drive, &report) {
+        for line in format::capacity_text(drive, &report) {
             println!("{line}");
         }
     }
@@ -266,14 +297,10 @@ pub fn run_capacity(number: usize, force: bool, confirm: Option<&str>, json: boo
 }
 
 /// `onyx test write`: write every block, and read each one back.
-pub fn run_write(number: usize, force: bool, confirm: Option<&str>, json: bool) -> Result<i32> {
-    let (drive, open) = open_for_write(
-        number,
-        force,
-        confirm,
-        "The write test erases every byte of the drive. It",
-    )?;
-    let device = device(&drive, &open)?;
+pub fn run_write(target: &WriteTarget) -> Result<i32> {
+    let opened = open_for_write(target, "The write test erases every byte of the drive. It")?;
+    let (drive, json) = (&opened.drive, target.json);
+    let device = device(drive, &opened.file)?;
     let mut meter = Meter::new();
     let report = verify::test(&device, run_mark(), |p| {
         let what = match p.pass {
@@ -285,9 +312,9 @@ pub fn run_write(number: usize, force: bool, confirm: Option<&str>, json: bool) 
     });
     meter.done();
     if json {
-        println!("{}", format::verify_json(&drive, &report));
+        println!("{}", format::verify_json(drive, &report));
     } else {
-        for line in format::verify_text(&drive, &report) {
+        for line in format::verify_text(drive, &report) {
             println!("{line}");
         }
     }

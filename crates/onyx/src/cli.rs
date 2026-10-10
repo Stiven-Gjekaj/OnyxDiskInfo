@@ -86,9 +86,15 @@ pub enum TestCommand {
 
 /// The drive of a test that writes, and how the person confirms it.
 #[derive(Debug, clap::Args)]
+#[command(group(ArgGroup::new("target").required(true).args(["drive", "image"])))]
 pub struct WriteTarget {
     /// The number of the drive, as `onyx list` shows it.
-    pub drive: usize,
+    pub drive: Option<usize>,
+    /// An image file, or on Linux a block device that `onyx list` does not
+    /// show, such as one of the device mapper. The kernel refuses one that
+    /// is mounted.
+    #[arg(long)]
+    pub image: Option<PathBuf>,
     /// Allow a drive that Onyx cannot prove is removable. The system disk
     /// stays refused.
     #[arg(long)]
@@ -169,10 +175,12 @@ mod tests {
         else {
             panic!("not the capacity test");
         };
-        assert_eq!(target.drive, 2);
+        assert_eq!(target.drive, Some(2));
         assert!(!target.force);
         assert_eq!(target.confirm.as_deref(), Some("ProductCode 125829120000"));
         assert!(Cli::try_parse_from(["onyx", "test", "write"]).is_err());
+        assert!(Cli::try_parse_from(["onyx", "test", "write", "--image", "x.img"]).is_ok());
+        assert!(Cli::try_parse_from(["onyx", "test", "write", "2", "--image", "x.img"]).is_err());
     }
 
     #[test]
