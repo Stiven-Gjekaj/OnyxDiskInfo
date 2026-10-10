@@ -6,11 +6,22 @@
 //! IDENTIFY DEVICE gives 256 words of 16 bits, little endian. A string in it
 //! keeps two characters in each word, and the first of the two is in the high
 //! byte. That swap is the common trap of this module.
+//!
+//! The SMART attribute table is not in ACS. Each maker defines its own
+//! attributes. The layout of the table is the same on every drive, and the
+//! meaning of each raw value is not. [`attribute_name`] gives the names that
+//! most makers agree on.
 
 use crate::{Error, Result};
 
 /// The size of each ATA data block that this module reads, in bytes.
 pub const BLOCK_BYTES: usize = 512;
+
+/// The number of entries in the attribute table and in the threshold table.
+const TABLE_ENTRIES: usize = 30;
+
+/// The size of one entry, in bytes.
+const ENTRY_BYTES: usize = 12;
 
 /// The answer to IDENTIFY DEVICE, as far as Onyx reads it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -129,6 +140,227 @@ pub fn identity(bytes: &[u8]) -> Result<Identity> {
     })
 }
 
+/// One SMART attribute, with its threshold.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Attribute {
+    pub id: u8,
+    /// The flags. Bit 0 says that the attribute warns of a failure before it
+    /// happens.
+    pub flags: u16,
+    /// The normalized value, from 1 to 253 on most drives. Higher is better.
+    pub current: u8,
+    /// The lowest normalized value that the drive has seen.
+    pub worst: u8,
+    /// The six raw bytes, as the drive stores them.
+    pub raw: [u8; 6],
+    /// The threshold. The attribute fails when `current` is at or below it.
+    /// A threshold of zero never fails. `None` means the drive gave no
+    /// threshold for this attribute.
+    pub threshold: Option<u8>,
+}
+
+impl Attribute {
+    /// The raw value as one number of 48 bits.
+    ///
+    /// This is the reading that `smartctl` shows by default. Some attributes
+    /// pack more than one value into the six bytes. [`Attribute::value`]
+    /// unpacks the common ones.
+    pub fn raw48(&self) -> u64 {
+        self.raw
+            .iter()
+            .rev()
+            .fold(0u64, |value, b| value << 8 | u64::from(*b))
+    }
+
+    /// The attribute warns of a failure before it happens.
+    pub fn pre_fail(&self) -> bool {
+        self.flags & 1 != 0
+    }
+
+    /// The normalized value is at or below a threshold that is not zero.
+    pub fn failing_now(&self) -> bool {
+        matches!(self.threshold, Some(t) if t != 0 && self.current <= t)
+    }
+
+    /// The normalized value went at or below a threshold that is not zero at
+    /// some time in the past.
+    pub fn failed_in_past(&self) -> bool {
+        matches!(self.threshold, Some(t) if t != 0 && self.worst <= t)
+    }
+
+    /// The value that a person reads.
+    ///
+    /// A temperature keeps the current reading in the lowest byte and a
+    /// minimum and a maximum in higher bytes. Power-on time keeps the hours
+    /// in the lowest four bytes on most drives. Every other attribute is the
+    /// whole raw value.
+    pub fn value(&self) -> u64 {
+        match self.id {
+            TEMPERATURE | AIRFLOW_TEMPERATURE => u64::from(self.raw[0]),
+            POWER_ON_HOURS => self.raw48() & 0xffff_ffff,
+            _ => self.raw48(),
+        }
+    }
+}
+
+/// The SMART data of one drive.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Smart {
+    /// The attributes, in the order of the table.
+    pub attributes: Vec<Attribute>,
+    /// The status of the last self test, from byte 363. The high four bits
+    /// give the result, and 0 means the test passed or none ran.
+    pub self_test_status: u8,
+    /// The checksum in byte 511 is wrong.
+    pub bad_checksum: bool,
+}
+
+impl Smart {
+    /// The attribute with this identifier, if the drive has it.
+    pub fn attribute(&self, id: u8) -> Option<&Attribute> {
+        self.attributes.iter().find(|a| a.id == id)
+    }
+
+    /// The temperature in degrees Celsius, from attribute 194 or 190.
+    pub fn temperature_celsius(&self) -> Option<i32> {
+        [TEMPERATURE, AIRFLOW_TEMPERATURE]
+            .iter()
+            .find_map(|id| self.attribute(*id))
+            .map(|a| i32::from(a.raw[0]))
+            .filter(|t| *t > 0)
+    }
+}
+
+fn check_block(bytes: &[u8], what: &str) -> Result<bool> {
+    if bytes.len() < BLOCK_BYTES {
+        return Err(Error::host(
+            what,
+            format!("{} bytes, and the block has {BLOCK_BYTES}", bytes.len()),
+        ));
+    }
+    Ok(bytes[..BLOCK_BYTES]
+        .iter()
+        .fold(0u8, |sum, b| sum.wrapping_add(*b))
+        != 0)
+}
+
+/// Read SMART READ DATA and SMART READ THRESHOLDS together.
+///
+/// An entry with an identifier of zero is empty. A threshold table that the
+/// drive refused leaves each threshold absent.
+pub fn smart(data: &[u8], thresholds: Option<&[u8]>) -> Result<Smart> {
+    let bad_checksum = check_block(data, "ATA SMART READ DATA")?;
+    let limits: Vec<(u8, u8)> = match thresholds {
+        Some(t) => {
+            check_block(t, "ATA SMART READ THRESHOLDS")?;
+            (0..TABLE_ENTRIES)
+                .map(|i| 2 + i * ENTRY_BYTES)
+                .map(|at| (t[at], t[at + 1]))
+                .filter(|(id, _)| *id != 0)
+                .collect()
+        }
+        None => Vec::new(),
+    };
+
+    let attributes = (0..TABLE_ENTRIES)
+        .map(|i| 2 + i * ENTRY_BYTES)
+        .filter(|at| data[*at] != 0)
+        .map(|at| {
+            let id = data[at];
+            let mut raw = [0u8; 6];
+            raw.copy_from_slice(&data[at + 5..at + 11]);
+            Attribute {
+                id,
+                flags: u16::from_le_bytes([data[at + 1], data[at + 2]]),
+                current: data[at + 3],
+                worst: data[at + 4],
+                raw,
+                threshold: limits.iter().find(|(t, _)| *t == id).map(|(_, v)| *v),
+            }
+        })
+        .collect();
+
+    Ok(Smart {
+        attributes,
+        self_test_status: data[363],
+        bad_checksum,
+    })
+}
+
+pub const READ_ERROR_RATE: u8 = 1;
+pub const REALLOCATED_SECTORS: u8 = 5;
+pub const POWER_ON_HOURS: u8 = 9;
+pub const POWER_CYCLES: u8 = 12;
+pub const AIRFLOW_TEMPERATURE: u8 = 190;
+pub const TEMPERATURE: u8 = 194;
+pub const PENDING_SECTORS: u8 = 197;
+pub const OFFLINE_UNCORRECTABLE: u8 = 198;
+
+/// The name that most makers give an attribute.
+///
+/// A maker can give an identifier its own meaning. These names are the ones
+/// that most drives agree on. An identifier that is not here has no name.
+pub fn attribute_name(id: u8) -> Option<&'static str> {
+    Some(match id {
+        1 => "Read Error Rate",
+        2 => "Throughput Performance",
+        3 => "Spin-Up Time",
+        4 => "Start/Stop Count",
+        5 => "Reallocated Sectors Count",
+        7 => "Seek Error Rate",
+        8 => "Seek Time Performance",
+        9 => "Power-On Hours",
+        10 => "Spin Retry Count",
+        11 => "Recalibration Retries",
+        12 => "Power Cycle Count",
+        170 => "Available Reserved Space",
+        171 => "Program Fail Count",
+        172 => "Erase Fail Count",
+        173 => "Wear Leveling Count",
+        174 => "Unexpected Power Loss Count",
+        177 => "Wear Range Delta",
+        179 => "Used Reserved Block Count Total",
+        181 => "Program Fail Count Total",
+        182 => "Erase Fail Count Total",
+        183 => "Runtime Bad Block",
+        184 => "End-to-End Error",
+        187 => "Reported Uncorrectable Errors",
+        188 => "Command Timeout",
+        189 => "High Fly Writes",
+        190 => "Airflow Temperature",
+        191 => "G-Sense Error Rate",
+        192 => "Power-Off Retract Count",
+        193 => "Load Cycle Count",
+        194 => "Temperature",
+        195 => "Hardware ECC Recovered",
+        196 => "Reallocation Event Count",
+        197 => "Current Pending Sector Count",
+        198 => "Offline Uncorrectable Sector Count",
+        199 => "UltraDMA CRC Error Count",
+        200 => "Write Error Rate",
+        202 => "Percent Lifetime Remaining",
+        220 => "Disk Shift",
+        222 => "Loaded Hours",
+        223 => "Load/Unload Retry Count",
+        224 => "Load Friction",
+        225 => "Load/Unload Cycle Count",
+        226 => "Load-in Time",
+        230 => "GMR Head Amplitude",
+        231 => "Life Left",
+        232 => "Endurance Remaining",
+        233 => "Media Wearout Indicator",
+        234 => "Average Erase Count",
+        235 => "Good Block Count",
+        240 => "Head Flying Hours",
+        241 => "Total LBAs Written",
+        242 => "Total LBAs Read",
+        254 => "Free Fall Protection",
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -240,5 +472,157 @@ pub(crate) mod tests {
     #[test]
     fn an_identify_block_too_short_is_an_error_and_not_a_panic() {
         assert!(identity(&[0u8; 511]).is_err());
+    }
+
+    /// One attribute entry: identifier, flags, current, worst, raw.
+    fn put_attribute(block: &mut [u8], slot: usize, id: u8, flags: u16, cur: u8, raw: u64) {
+        let at = 2 + slot * ENTRY_BYTES;
+        block[at] = id;
+        block[at + 1..at + 3].copy_from_slice(&flags.to_le_bytes());
+        block[at + 3] = cur;
+        block[at + 4] = cur;
+        block[at + 5..at + 11].copy_from_slice(&raw.to_le_bytes()[..6]);
+    }
+
+    fn put_threshold(block: &mut [u8], slot: usize, id: u8, threshold: u8) {
+        let at = 2 + slot * ENTRY_BYTES;
+        block[at] = id;
+        block[at + 1] = threshold;
+    }
+
+    /// Set the checksum in byte 511 so that the block adds up to zero.
+    fn seal_data(block: &mut [u8]) {
+        let sum = block[..511].iter().fold(0u8, |s, b| s.wrapping_add(*b));
+        block[511] = 0u8.wrapping_sub(sum);
+    }
+
+    pub(crate) fn smart_blocks() -> (Vec<u8>, Vec<u8>) {
+        let mut data = vec![0u8; BLOCK_BYTES];
+        data[0] = 0x10;
+        put_attribute(&mut data, 0, REALLOCATED_SECTORS, 0x33, 100, 0);
+        put_attribute(&mut data, 1, POWER_ON_HOURS, 0x32, 95, 21_544);
+        put_attribute(&mut data, 2, POWER_CYCLES, 0x32, 99, 1_212);
+        // 36 now, a minimum of 20 and a maximum of 52.
+        put_attribute(&mut data, 3, TEMPERATURE, 0x22, 64, 0x0034_0014_0024);
+        put_attribute(&mut data, 4, PENDING_SECTORS, 0x32, 100, 0);
+        seal_data(&mut data);
+
+        let mut limits = vec![0u8; BLOCK_BYTES];
+        put_threshold(&mut limits, 0, REALLOCATED_SECTORS, 10);
+        put_threshold(&mut limits, 1, POWER_ON_HOURS, 0);
+        put_threshold(&mut limits, 2, POWER_CYCLES, 0);
+        put_threshold(&mut limits, 3, TEMPERATURE, 0);
+        seal_data(&mut limits);
+        (data, limits)
+    }
+
+    #[test]
+    fn each_used_entry_of_the_table_becomes_an_attribute() {
+        let (data, limits) = smart_blocks();
+        let s = smart(&data, Some(&limits)).unwrap();
+        let ids: Vec<u8> = s.attributes.iter().map(|a| a.id).collect();
+        assert_eq!(ids, [5, 9, 12, 194, 197]);
+        assert!(!s.bad_checksum);
+    }
+
+    #[test]
+    fn an_attribute_takes_the_threshold_with_its_identifier() {
+        let (data, limits) = smart_blocks();
+        let s = smart(&data, Some(&limits)).unwrap();
+        assert_eq!(s.attribute(5).unwrap().threshold, Some(10));
+        assert_eq!(s.attribute(9).unwrap().threshold, Some(0));
+        // The threshold table has no entry for 197.
+        assert_eq!(s.attribute(197).unwrap().threshold, None);
+    }
+
+    #[test]
+    fn with_no_threshold_table_each_threshold_is_absent() {
+        let (data, _) = smart_blocks();
+        let s = smart(&data, None).unwrap();
+        assert!(s.attributes.iter().all(|a| a.threshold.is_none()));
+    }
+
+    #[test]
+    fn the_raw_value_is_six_bytes_little_endian() {
+        let (data, limits) = smart_blocks();
+        let s = smart(&data, Some(&limits)).unwrap();
+        assert_eq!(s.attribute(9).unwrap().raw48(), 21_544);
+        assert_eq!(s.attribute(194).unwrap().raw48(), 0x0034_0014_0024);
+    }
+
+    #[test]
+    fn the_temperature_is_the_lowest_byte_of_its_raw_value() {
+        let (data, limits) = smart_blocks();
+        let s = smart(&data, Some(&limits)).unwrap();
+        assert_eq!(s.attribute(194).unwrap().value(), 36);
+        assert_eq!(s.temperature_celsius(), Some(36));
+    }
+
+    #[test]
+    fn power_on_hours_keep_only_the_lowest_four_bytes() {
+        let a = Attribute {
+            id: POWER_ON_HOURS,
+            flags: 0,
+            current: 100,
+            worst: 100,
+            raw: [0x10, 0x27, 0, 0, 0x99, 0x01],
+            threshold: None,
+        };
+        assert_eq!(a.value(), 10_000);
+    }
+
+    #[test]
+    fn an_attribute_fails_at_its_threshold_and_not_above_it() {
+        let mut a = Attribute {
+            id: REALLOCATED_SECTORS,
+            flags: 0x33,
+            current: 11,
+            worst: 11,
+            raw: [0; 6],
+            threshold: Some(10),
+        };
+        assert!(a.pre_fail());
+        assert!(!a.failing_now());
+        a.current = 10;
+        assert!(a.failing_now());
+        a.threshold = Some(0);
+        assert!(!a.failing_now(), "a threshold of zero never fails");
+        a.threshold = None;
+        assert!(!a.failing_now());
+    }
+
+    #[test]
+    fn a_worst_value_at_the_threshold_is_a_failure_in_the_past() {
+        let a = Attribute {
+            id: REALLOCATED_SECTORS,
+            flags: 0x33,
+            current: 100,
+            worst: 9,
+            raw: [0; 6],
+            threshold: Some(10),
+        };
+        assert!(!a.failing_now());
+        assert!(a.failed_in_past());
+    }
+
+    #[test]
+    fn a_wrong_smart_checksum_is_reported() {
+        let (mut data, limits) = smart_blocks();
+        data[100] ^= 0xff;
+        assert!(smart(&data, Some(&limits)).unwrap().bad_checksum);
+    }
+
+    #[test]
+    fn a_smart_block_too_short_is_an_error_and_not_a_panic() {
+        let (data, _) = smart_blocks();
+        assert!(smart(&data[..511], None).is_err());
+        assert!(smart(&data, Some(&[0u8; 10])).is_err());
+    }
+
+    #[test]
+    fn the_common_attributes_have_names_and_the_others_do_not() {
+        assert_eq!(attribute_name(5), Some("Reallocated Sectors Count"));
+        assert_eq!(attribute_name(194), Some("Temperature"));
+        assert_eq!(attribute_name(6), None);
     }
 }
