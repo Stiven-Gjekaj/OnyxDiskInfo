@@ -146,15 +146,33 @@ def check_linux(image, fs, names):
     part = f"{device}p1"
     mount = tempfile.mkdtemp()
     try:
+        # udev can remove the node of a new partition and make it again, so
+        # wait until it has handled each event, then for the node.
+        subprocess.run(["udevadm", "settle", "--timeout=10"], capture_output=True)
         for _ in range(50):
             if os.path.exists(part):
                 break
             time.sleep(0.1)
+
         # -p reads the volume itself, and not the cache of blkid, which
-        # gives no VERSION.
+        # gives no VERSION. blkid gives 2 when it finds nothing: for a tag
+        # that the file system does not have, and for a node that udev still
+        # makes. So only the type, which each file system has, waits.
         def probe(tag):
-            return run(["blkid", "-p", "-o", "value", "-s", tag, part]).strip() or None
-        kind, version, label = probe("TYPE"), probe("VERSION"), probe("LABEL") or ""
+            done = subprocess.run(["blkid", "-p", "-o", "value", "-s", tag, part],
+                                  capture_output=True, text=True)
+            if done.returncode not in (0, 2):
+                raise RuntimeError(f"blkid gave {done.returncode}: {done.stderr.strip()}")
+            return done.stdout.strip() or None
+        kind = None
+        for _ in range(10):
+            kind = probe("TYPE")
+            if kind:
+                break
+            time.sleep(0.5)
+        if not kind:
+            raise RuntimeError(f"blkid finds no file system on {part}")
+        version, label = probe("VERSION"), probe("LABEL") or ""
         check = LINUX_CHECK.get(kind)
         if check is None:
             raise RuntimeError(f"blkid reads {kind!r}, which this script has no check for")
