@@ -5,9 +5,9 @@ person can run it wherever fio is:
 
     python3 scripts/check-bench.py target/release/onyx <directory>
 
-Both tools use one test file of 1 GiB in the directory. Onyx makes it, runs
-its jobs, and keeps it. fio then runs the same jobs on the same file, and
-the script deletes the file. A file that another program writes is laid out
+Both tools use one test file of 1 GiB in the directory. A short run of Onyx
+makes it and keeps it. fio then runs the jobs on it, then Onyx with
+`--reuse`, then fio again, and the script deletes the file. A file that another program writes is laid out
 in another way, and fio read such a file 20 percent slower than its own on an
 APFS drive, so two files would compare two layouts and not two tools.
 
@@ -25,9 +25,12 @@ fio read at 7.0 GB/s with a queue of eight from its own file, and at 1.2 to
 on that file. So on macOS only the jobs with a queue of one are compared.
 Linux compares all four.
 
-fio runs twice. A job passes when the speed of Onyx is within 10 percent of
-the range that the two runs of fio span: at least 90 percent of the slower
-run, and at most 110 percent of the faster one. The script prints all three
+fio runs before Onyx and after it. A job passes when the speed of Onyx is
+within 10 percent of the range that the two runs of fio span: at least 90
+percent of the slower run, and at most 110 percent of the faster one. A disk
+whose speed drifts during the check then moves the range around Onyx. When
+Onyx ran first and fio twice after it, a cloud disk that slowed down gave
+Onyx the fast part each time. The script prints all three
 speeds, so a person sees how far apart they are. On the disk of a cloud
 runner, two runs of fio differed by up to 28 percent, so CI runs this as a
 report and the exit test runs on a quiet local drive.
@@ -96,13 +99,18 @@ def main():
             speeds[(name, True)] = fio(test_file, write, bs, queue)
         return speeds
 
-    try:
+    def onyx_pass(*extra):
         done = subprocess.run(
-            [onyx, "bench", "--file", test_file, "--keep", "--seconds", str(SECONDS), "--json"],
+            [onyx, "bench", "--file", test_file, "--keep", "--json", *extra],
             check=True, capture_output=True, text=True,
         )
-        ours = {(j["job"], j["write"]): j["bytes_per_second"] for j in json.loads(done.stdout)["jobs"]}
+        return {(j["job"], j["write"]): j["bytes_per_second"] for j in json.loads(done.stdout)["jobs"]}
+
+    try:
+        # Lay out the file, so that fio measures the file that Onyx measures.
+        onyx_pass("--seconds", "1")
         before = fio_pass()
+        ours = onyx_pass("--reuse", "--seconds", str(SECONDS))
         after = fio_pass()
     finally:
         if os.path.exists(test_file):
