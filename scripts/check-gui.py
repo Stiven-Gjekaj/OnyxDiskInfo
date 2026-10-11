@@ -180,9 +180,12 @@ def main():
     parser.add_argument("--shots", help="a directory for a screenshot of each drive")
     args = parser.parse_args()
 
-    drives = json.loads(subprocess.run(
-        [args.onyx, "list", "--json"], check=True, capture_output=True, text=True,
-    ).stdout)["drives"]
+    def listed():
+        return json.loads(subprocess.run(
+            [args.onyx, "list", "--json"], check=True, capture_output=True, text=True,
+        ).stdout)["drives"]
+
+    drives = listed()
 
     env = dict(os.environ, SLINT_MCP_PORT=str(PORT))
     if args.headless:
@@ -195,6 +198,20 @@ def main():
         window = mcp.window()
         wait_until_read(mcp, window)
         tabs = [handle for handle, _ in mcp.elements(window, "Tab")]
+        # A host can attach a drive while the test runs: the macOS runner
+        # attaches disk images in the background, and once went from 5 to 15
+        # between the list and the app. So when the two differ, the app reads
+        # again, and so does onyx.
+        for _ in range(3):
+            if len(tabs) == len(drives):
+                break
+            print(f"the app shows {len(tabs)} drives, and onyx lists {len(drives)}: reading again")
+            refresh = next(h for h, label in mcp.elements(window, "Button") if label == "Refresh")
+            mcp.press(refresh)
+            time.sleep(1)
+            wait_until_read(mcp, window)
+            drives = listed()
+            tabs = [handle for handle, _ in mcp.elements(window, "Tab")]
         if len(tabs) != len(drives):
             failures.append(f"the app shows {len(tabs)} drives, and onyx lists {len(drives)}")
         for drive, tab in zip(drives, tabs):
