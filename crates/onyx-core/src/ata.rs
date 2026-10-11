@@ -377,8 +377,10 @@ pub fn attribute_name(id: u8) -> Option<&'static str> {
         234 => "Average Erase Count",
         235 => "Good Block Count",
         240 => "Head Flying Hours",
-        241 => "Total LBAs Written",
-        242 => "Total LBAs Read",
+        // The unit is the maker's: sectors on most hard disks, GiB on a
+        // Kingston SA400, 32 MiB on others. So the name gives none.
+        241 => "Total Host Writes",
+        242 => "Total Host Reads",
         254 => "Free Fall Protection",
         _ => return None,
     })
@@ -654,6 +656,8 @@ pub(crate) mod tests {
         assert_eq!(attribute_name(5), Some("Reallocated Sectors Count"));
         assert_eq!(attribute_name(194), Some("Temperature"));
         assert_eq!(attribute_name(6), None);
+        // A name that gives no unit, because each maker counts in its own.
+        assert_eq!(attribute_name(241), Some("Total Host Writes"));
     }
 
     /// Parse a block that is written as lines of hexadecimal.
