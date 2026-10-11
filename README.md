@@ -42,7 +42,9 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > The desktop app shows the same values as `onyx health` on all three hosts.
 > `onyx format` and `onyx erase` work, and each host checks and mounts each
 > file system that Onyx writes. The erase commands of the firmware wait for
-> a drive to test them.
+> a drive to test them. `onyx watch` keeps a history of each drive and gives
+> an alert when one gets worse.
+> Version 0.1.0 is out, through Homebrew and Scoop, and winget follows.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
 > behind it.
