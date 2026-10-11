@@ -56,3 +56,5 @@ Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
   node takes.
 - A benchmark job could give a speed of zero when the host started a worker
   late.
+- Attributes 241 and 242 are "Total Host Writes" and "Total Host Reads". The
+  old names gave a unit, LBAs, and a Kingston SA400 counts GiB there.
