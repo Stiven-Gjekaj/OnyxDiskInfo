@@ -1,0 +1,9 @@
+# The Microsoft C runtime is a separate install. A fresh Windows does not hold
+# it, so a binary that links it at run time stops with "VCRUNTIME140.dll was
+# not found" on a machine that never ran a developer tool. Burnout measured
+# this on a clean Windows 11 install.
+#
+# Onyx ships its programs with no runtime beside them, so link the C runtime
+# into each binary.
+[target.'cfg(target_env = "msvc")']
+rustflags = ["-C", "target-feature=+crt-static"]
