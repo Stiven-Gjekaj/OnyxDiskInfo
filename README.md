@@ -22,6 +22,7 @@ _One tool, the same on Windows, on macOS, and on Linux._
   <a href="#what-it-does"><b>Features</b></a> |
   <a href="#disks-without-smart"><b>Without SMART</b></a> |
   <a href="#the-shape-of-the-command"><b>Commands</b></a> |
+  <a href="#install"><b>Install</b></a> |
   <a href="docs/roadmap.md"><b>Roadmap</b></a>
 </p>
 
@@ -122,6 +123,38 @@ many blocks still give old bytes.
 A command that reads never writes.
 A command that writes asks you to confirm the drive, and it refuses the disk
 that the running system starts from.
+
+## Install
+
+Homebrew, on macOS and on Linux. The first line installs the command line,
+and the second installs the app on macOS:
+
+```bash
+brew install stiven-gjekaj/tap/onyxdiskinfo
+brew install --cask stiven-gjekaj/tap/onyxdiskinfo
+```
+
+Scoop, on Windows. It installs the command line and the app:
+
+```powershell
+scoop bucket add stiven https://github.com/Stiven-Gjekaj/scoop-bucket
+scoop install stiven/onyxdiskinfo
+```
+
+winget, on Windows, after Microsoft accepts the package:
+
+```powershell
+winget install Stiven-Gjekaj.OnyxDiskInfo
+```
+
+Or download a file from the
+[releases](https://github.com/Stiven-Gjekaj/OnyxDiskInfo/releases).
+[docs/releasing.md](docs/releasing.md) says what each file is, and how to
+check that it came from this repository.
+
+No paid certificate signs the app. macOS asks before it opens the app the
+first time: open System Settings, then Privacy & Security, and choose Open
+Anyway.
 
 ## Build
 
