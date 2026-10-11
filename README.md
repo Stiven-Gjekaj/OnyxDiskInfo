@@ -39,6 +39,9 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > `onyx scan`, `onyx bench`, and `onyx test` work. The capacity test finds a
 > fake drive. The comparison of the benchmarks with fio is partly proven.
 > The desktop app shows the same values as `onyx health` on all three hosts.
+> `onyx format` and `onyx erase` work, and each host checks and mounts each
+> file system that Onyx writes. The erase commands of the firmware wait for
+> a drive to test them.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
 > behind it.
@@ -72,7 +75,7 @@ the dark scheme of the system. The serial number is masked.
 | Bridges | SAT pass-through for a drive in a USB case. `smartctl` is a fallback if it is on your computer, and it reads the JMicron, ASMedia, and Realtek bridges until Onyx can test its own commands for them. |
 | Tests | A surface scan, a write and verify test, a fake capacity test, and benchmarks. |
 | Layout | GPT and MBR. Onyx writes FAT12, FAT16, FAT32, and exFAT itself. The tools of the host write NTFS, ext4, btrfs, XFS, APFS, and HFS+. |
-| Erase | ATA Secure Erase, NVMe Format, NVMe Sanitize, a full TRIM, and overwrite passes. |
+| Erase | Overwrite passes and a full TRIM. ATA Secure Erase, NVMe Format, and NVMe Sanitize come next. |
 | History | Each reading goes into SQLite. A value that changes makes an alert. |
 
 ## Disks without SMART
@@ -87,8 +90,6 @@ A value that Onyx measures never looks like a value that the disk reports.
 
 ## The shape of the command
 
-Every command but `format` and `erase` exists today.
-
 ```
 onyx list
 onyx health <number> [--json]
@@ -97,8 +98,9 @@ onyx bench <number> [--json]
 onyx bench --file <path> [--size-mib 1024] [--json]
 onyx test capacity <number> [--force] [--confirm "<model> <size>"]
 onyx test write <number> [--force] [--confirm "<model> <size>"]
-onyx format <number> --fs exfat
-onyx erase <number>
+onyx format <number> --fs exfat [--table mbr|gpt] [--label NAME]
+onyx erase <number> [--pass zero|ones|random]... [--no-check]
+onyx erase <number> --trim
 ```
 
 `scan` reads every block and sorts each one by its read time, like MHDD and
@@ -107,6 +109,10 @@ reads, and in a test file it reads and writes, then deletes the file.
 `test capacity` finds a fake drive that claims more space than it has. It
 saves the blocks that it writes over and puts them back. `test write` writes
 every block and reads each one back, and it erases the drive.
+`format` writes a new table with one partition, and a file system in it.
+`erase` writes one pass of zeros by default and reads it back. `--trim`
+takes seconds on a flash drive, and Onyx then reads a sample and says how
+many blocks still give old bytes.
 
 A command that reads never writes.
 A command that writes asks you to confirm the drive, and it refuses the disk
