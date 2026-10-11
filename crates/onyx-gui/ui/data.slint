@@ -41,6 +41,11 @@ export global AppData {
     in property <string> message;
     in property <bool> needs-rights;
     in property <bool> busy;
+    // The history of the current drive: a path in a box of 1000 by 100, the
+    // words over it, and the newest alerts.
+    in property <string> trend-commands;
+    in property <string> trend-text;
+    in property <[string]> alerts;
 }
 
 export global Logic {

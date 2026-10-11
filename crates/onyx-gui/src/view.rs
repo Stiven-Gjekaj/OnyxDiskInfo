@@ -55,6 +55,86 @@ pub struct DriveView {
     pub message: String,
     /// The drive needs administrator rights to read.
     pub needs_rights: bool,
+    /// The temperature in the history, as the commands of a path in a box
+    /// of [`TREND_WIDTH`] by [`TREND_HEIGHT`]. Empty when the history holds
+    /// fewer than two readings.
+    pub trend_commands: String,
+    /// What the chart shows, in words.
+    pub trend_text: String,
+    /// The newest alerts of the drive in the history.
+    pub alerts: Vec<String>,
+}
+
+/// The size of the box that the commands of the chart draw in.
+pub const TREND_WIDTH: f64 = 1000.0;
+pub const TREND_HEIGHT: f64 = 100.0;
+
+/// The commands of a line through `points`, each a time and a value, that
+/// fills the box from the first time to the last and from the lowest value
+/// to the highest. A flat line goes through the middle.
+pub fn trend_commands(points: &[(i64, i64)]) -> String {
+    if points.len() < 2 {
+        return String::new();
+    }
+    let (t0, t1) = (points[0].0, points[points.len() - 1].0);
+    let low = points.iter().map(|p| p.1).min().unwrap_or(0);
+    let high = points.iter().map(|p| p.1).max().unwrap_or(0);
+    let x = |t: i64| {
+        if t1 == t0 {
+            0.0
+        } else {
+            (t - t0) as f64 / (t1 - t0) as f64 * TREND_WIDTH
+        }
+    };
+    let y = |v: i64| {
+        if high == low {
+            TREND_HEIGHT / 2.0
+        } else {
+            TREND_HEIGHT - (v - low) as f64 / (high - low) as f64 * TREND_HEIGHT
+        }
+    };
+    points
+        .iter()
+        .enumerate()
+        .map(|(i, (t, v))| {
+            format!(
+                "{} {:.1} {:.1}",
+                if i == 0 { "M" } else { "L" },
+                x(*t),
+                y(*v)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The words over the chart.
+pub fn trend_text(points: &[(i64, i64)]) -> String {
+    match points {
+        [] => "No temperature in the history yet.".to_string(),
+        [one] => format!("Temperature: {} C, one reading so far.", one.1),
+        _ => {
+            let low = points.iter().map(|p| p.1).min().unwrap_or(0);
+            let high = points.iter().map(|p| p.1).max().unwrap_or(0);
+            format!(
+                "Temperature: {low} to {high} C over {} readings since {}",
+                points.len(),
+                onyx::history::utc(points[0].0)
+            )
+        }
+    }
+}
+
+/// The view with the history of the drive.
+pub fn with_history(
+    mut view: DriveView,
+    temperature: &[(i64, i64)],
+    alerts: Vec<String>,
+) -> DriveView {
+    view.trend_commands = trend_commands(temperature);
+    view.trend_text = trend_text(temperature);
+    view.alerts = alerts;
+    view
 }
 
 fn text(json: &Value, key: &str) -> Option<String> {
@@ -114,6 +194,9 @@ pub fn listed(drive: &Value) -> DriveView {
         rows: Vec::new(),
         message: String::new(),
         needs_rights: false,
+        trend_commands: String::new(),
+        trend_text: String::new(),
+        alerts: Vec::new(),
     }
 }
 
@@ -456,5 +539,26 @@ mod tests {
         let v = with_error(listed(&apple()), "gives no health data", false);
         assert_eq!(v.verdict_text, "Unknown");
         assert!(!v.needs_rights);
+    }
+
+    #[test]
+    fn the_chart_runs_from_the_first_reading_to_the_last_and_fills_the_box() {
+        let c = trend_commands(&[(100, 30), (200, 40), (300, 35)]);
+        assert_eq!(c, "M 0.0 100.0 L 500.0 0.0 L 1000.0 50.0");
+        assert_eq!(
+            trend_commands(&[(1, 40), (2, 40)]),
+            "M 0.0 50.0 L 1000.0 50.0"
+        );
+        assert_eq!(trend_commands(&[(1, 40)]), "");
+    }
+
+    #[test]
+    fn the_words_of_the_chart_give_the_range_and_the_count() {
+        assert_eq!(
+            trend_text(&[(0, 31), (60, 45)]),
+            "Temperature: 31 to 45 C over 2 readings since 1970-01-01 00:00 UTC"
+        );
+        assert!(trend_text(&[(0, 31)]).contains("one reading"));
+        assert!(trend_text(&[]).contains("No temperature"));
     }
 }

@@ -35,7 +35,8 @@ pub fn drive_of(info: &DriveInfo) -> Drive {
     Drive::new(model, info.serial.as_deref(), &info.node)
 }
 
-fn now() -> i64 {
+/// The time now, in seconds since 1970.
+pub fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)

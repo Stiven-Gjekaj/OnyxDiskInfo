@@ -135,6 +135,57 @@ export component MainWindow inherits Window {
             }
         }
 
+        // The history: the temperature over time, and the newest alerts.
+        if AppData.trend-text != "" || AppData.alerts.length > 0: HorizontalLayout {
+            spacing: Theme.gap-large;
+            height: 92px;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: Theme.gap-small;
+                Text {
+                    text: AppData.trend-text;
+                    color: Theme.muted-text;
+                    font-size: Theme.small-font-size;
+                    overflow: elide;
+                }
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: Theme.surface;
+                    border-width: 1px;
+                    border-color: Theme.border;
+                    border-radius: Theme.radius;
+                    if AppData.trend-commands != "": Path {
+                        x: Theme.gap;
+                        y: Theme.gap-small;
+                        width: parent.width - 2 * Theme.gap;
+                        height: parent.height - 2 * Theme.gap-small;
+                        commands: AppData.trend-commands;
+                        viewbox-width: 1000;
+                        viewbox-height: 100;
+                        stroke: Theme.verdict-color(Verdict.good);
+                        stroke-width: 2px;
+                        accessible-role: image;
+                        accessible-label: AppData.trend-text;
+                    }
+                }
+            }
+            VerticalLayout {
+                width: 320px;
+                spacing: Theme.gap-small;
+                Text {
+                    text: AppData.alerts.length == 0 ? "No alert in the history." : "Alerts";
+                    color: Theme.muted-text;
+                    font-size: Theme.small-font-size;
+                }
+                for alert in AppData.alerts: Text {
+                    text: alert;
+                    color: Theme.text;
+                    font-size: Theme.small-font-size;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
         AttributeTable {
             vertical-stretch: 1;
             min-height: 160px;

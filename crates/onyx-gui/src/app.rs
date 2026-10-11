@@ -106,6 +106,9 @@ fn show(ui: &MainWindow) {
         ));
         data.set_message(v.message.clone().into());
         data.set_needs_rights(v.needs_rights);
+        data.set_trend_commands(v.trend_commands.clone().into());
+        data.set_trend_text(v.trend_text.clone().into());
+        data.set_alerts(model(v.alerts.iter().map(SharedString::from).collect()));
     });
 }
 
@@ -124,6 +127,21 @@ fn update(weak: &Weak<MainWindow>, index: usize, change: impl FnOnce(DriveView) 
 /// The JSON of one drive, as `onyx list --json` gives it.
 fn listed_json(number: usize, drive: &DriveInfo) -> Option<Value> {
     serde_json::from_str(&onyx::format::drive_json(number, drive).to_string()).ok()
+}
+
+/// The most alerts of one drive that the window shows.
+const ALERTS_SHOWN: usize = 4;
+
+/// The temperature of a drive over time, and its newest alerts as text.
+fn history_of(store: &onyx_store::Store, key: &str) -> (Vec<(i64, i64)>, Vec<String>) {
+    let temperature = store.series(key, "temperature").unwrap_or_default();
+    let alerts = store
+        .alerts_of(key, ALERTS_SHOWN)
+        .unwrap_or_default()
+        .iter()
+        .map(|a| format!("{}: {}", onyx::history::utc(a.taken_at), a.alert.message))
+        .collect();
+    (temperature, alerts)
 }
 
 /// Read the list, then the health of each drive, on a thread of their own.
@@ -157,8 +175,27 @@ fn load(weak: Weak<MainWindow>) {
             show(&ui);
         });
 
+        // The history is a help and not a need: the app shows the health
+        // without it when the file cannot open.
+        let mut store = onyx::history::open(&onyx::cli::StoreArgs {
+            db: None,
+            json: false,
+        })
+        .ok();
+        let taken_at = onyx::history::now();
         for (index, drive) in drives.iter().enumerate() {
-            let answer = match onyx_probe::health_record(drive) {
+            let record = onyx_probe::health_record(drive);
+            let key = onyx::history::drive_of(drive);
+            let (temperature, alerts) = match store.as_mut() {
+                Some(store) => {
+                    if let Ok(record) = &record {
+                        let _ = store.add(&key, taken_at, &onyx_core::snapshot::snapshot(record));
+                    }
+                    history_of(store, &key.key)
+                }
+                None => (Vec::new(), Vec::new()),
+            };
+            let answer = match record {
                 Ok(record) => {
                     serde_json::from_str::<Value>(&onyx::report::json(drive, &record).to_string())
                         .map_err(|e| (e.to_string(), false))
@@ -167,9 +204,12 @@ fn load(weak: Weak<MainWindow>) {
             };
             let weak = weak.clone();
             let _ = slint::invoke_from_event_loop(move || {
-                update(&weak, index, |v| match &answer {
-                    Ok(json) => view::with_health(v, json),
-                    Err((message, rights)) => view::with_error(v, message, *rights),
+                update(&weak, index, |v| {
+                    let v = match &answer {
+                        Ok(json) => view::with_health(v, json),
+                        Err((message, rights)) => view::with_error(v, message, *rights),
+                    };
+                    view::with_history(v, &temperature, alerts)
                 });
             });
         }

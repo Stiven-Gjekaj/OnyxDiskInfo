@@ -3341,6 +3341,7 @@ dependencies = [
  "onyx",
  "onyx-core",
  "onyx-probe",
+ "onyx-store",
  "serde_json",
  "slint",
  "slint-build",
