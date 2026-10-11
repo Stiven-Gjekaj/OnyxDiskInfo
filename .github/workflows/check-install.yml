@@ -79,7 +79,7 @@ jobs:
           codesign --verify --deep --strict "$app"
           defaults read "$app/Contents/Info.plist" CFBundleShortVersionString | grep -qx "${VERSION}"
           for name in OnyxDiskInfo onyx; do
-            lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/$name"
+            lipo "$app/Contents/MacOS/$name" -verify_arch arm64 x86_64
           done
           echo "OnyxDiskInfo.app ${VERSION} is in /Applications, sealed, for both chips"
 
