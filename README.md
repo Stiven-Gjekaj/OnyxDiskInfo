@@ -137,8 +137,8 @@ brew install --cask stiven-gjekaj/tap/onyxdiskinfo
 Scoop, on Windows. It installs the command line and the app:
 
 ```powershell
-scoop bucket add stiven https://github.com/Stiven-Gjekaj/scoop-bucket
-scoop install stiven/onyxdiskinfo
+scoop bucket add stiven-gjekaj https://github.com/Stiven-Gjekaj/scoop-bucket
+scoop install stiven-gjekaj/onyxdiskinfo
 ```
 
 winget, on Windows, after Microsoft accepts the package:
