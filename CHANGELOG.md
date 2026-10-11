@@ -48,6 +48,12 @@ Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
   NTFS on Windows.
 - `onyx erase` writes one pass or more over every byte of a drive and reads
   the last pass back, or sends a TRIM of the whole drive and reads a sample.
+- `onyx watch` reads every drive and keeps each reading in a SQLite
+  history. A worse verdict, more damage, or more wear makes an alert.
+  `onyx history` and `onyx alerts` show what the history holds.
+- The desktop app keeps each reading too, charts the temperature of each
+  drive, and shows its alerts. A tray icon keeps the app reading the drives
+  each hour after the window closes.
 
 ### Fixed
 
