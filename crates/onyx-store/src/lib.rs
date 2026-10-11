@@ -431,23 +431,25 @@ mod tests {
                     .map(|(_, v)| v.to_string())
             }
         };
-        let path = |os, pairs| default_path_for(os, env(pairs)).map(|p| p.display().to_string());
+        // A path compares by its parts, so the separator of the host that
+        // runs the test does not matter.
+        let path = |os, pairs| default_path_for(os, env(pairs));
+        let want = |p: &str| Some(std::path::PathBuf::from(p));
         assert_eq!(
-            path("macos", &[("HOME", "/Users/a")]).as_deref(),
-            Some("/Users/a/Library/Application Support/OnyxDiskInfo/history.sqlite")
-        );
-        assert!(
-            path("windows", &[("LOCALAPPDATA", r"C:\Users\a\AppData\Local")])
-                .unwrap()
-                .ends_with("history.sqlite")
+            path("macos", &[("HOME", "/Users/a")]),
+            want("/Users/a/Library/Application Support/OnyxDiskInfo/history.sqlite")
         );
         assert_eq!(
-            path("linux", &[("HOME", "/home/a")]).as_deref(),
-            Some("/home/a/.local/share/onyxdiskinfo/history.sqlite")
+            path("windows", &[("LOCALAPPDATA", "/c/Users/a/AppData/Local")]),
+            want("/c/Users/a/AppData/Local/OnyxDiskInfo/history.sqlite")
         );
         assert_eq!(
-            path("linux", &[("HOME", "/home/a"), ("XDG_DATA_HOME", "/data")]).as_deref(),
-            Some("/data/onyxdiskinfo/history.sqlite")
+            path("linux", &[("HOME", "/home/a")]),
+            want("/home/a/.local/share/onyxdiskinfo/history.sqlite")
+        );
+        assert_eq!(
+            path("linux", &[("HOME", "/home/a"), ("XDG_DATA_HOME", "/data")]),
+            want("/data/onyxdiskinfo/history.sqlite")
         );
         assert_eq!(path("linux", &[("HOME", "")]), None);
         assert_eq!(path("windows", &[]), None);
