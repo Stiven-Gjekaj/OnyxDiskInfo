@@ -76,7 +76,7 @@ the dark scheme of the system.
 | Tests | A surface scan, a write and verify test, a fake capacity test, and benchmarks. |
 | Layout | GPT and MBR. Onyx writes FAT12, FAT16, FAT32, and exFAT itself. The tools of the host write NTFS, ext4, btrfs, XFS, APFS, and HFS+. |
 | Erase | Overwrite passes and a full TRIM. ATA Secure Erase, NVMe Format, and NVMe Sanitize come next. |
-| History | Each reading goes into SQLite. A value that changes makes an alert. |
+| History | Each reading goes into SQLite. A worse verdict, more damage, or more wear makes an alert. The app charts the temperature, and a tray icon reads the drives each hour. |
 
 ## Disks without SMART
 
@@ -101,6 +101,9 @@ onyx test write <number> [--force] [--confirm "<model> <size>"]
 onyx format <number> --fs exfat [--table mbr|gpt] [--label NAME]
 onyx erase <number> [--pass zero|ones|random]... [--no-check]
 onyx erase <number> --trim
+onyx watch [--once] [--interval 3600] [--db <path>]
+onyx history [<number>] [--db <path>]
+onyx alerts [--db <path>]
 ```
 
 `scan` reads every block and sorts each one by its read time, like MHDD and
@@ -110,6 +113,8 @@ reads, and in a test file it reads and writes, then deletes the file.
 saves the blocks that it writes over and puts them back. `test write` writes
 every block and reads each one back, and it erases the drive.
 `format` writes a new table with one partition, and a file system in it.
+`watch` reads every drive, keeps each reading, and prints the alerts that
+it gives. `history` and `alerts` show what the history holds.
 `erase` writes one pass of zeros by default and reads it back. `--trim`
 takes seconds on a flash drive, and Onyx then reads a sample and says how
 many blocks still give old bytes.
