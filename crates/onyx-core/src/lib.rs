@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod alert;
 pub mod ata;
 mod drive;
 pub mod emmc;
