@@ -34,6 +34,9 @@ jobs:
           toolchain: 1.97.1
           components: rustfmt
       - run: cargo fmt --all --check
+      # The scripts that write the Homebrew, Scoop, and winget manifests of a
+      # release, run on made-up digests.
+      - run: scripts/check-packaging.sh
 
   check:
     name: check on ${{ matrix.os }}
