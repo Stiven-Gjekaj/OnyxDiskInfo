@@ -20,7 +20,8 @@ macOS.
 P4 is done but for its benchmark half, which is partly proven.
 P5 is done. P6 is done but for the erase commands of the firmware, which
 wait for a drive to test them. P7 is done but for a look at the tray icon on
-a screen. P8 is next.
+a screen. P8 is done but for winget, where Microsoft reviews the package.
+Version 0.1.0 is out.
 
 ```mermaid
 flowchart LR
@@ -340,3 +341,41 @@ Work: the release workflow, the build attestation, and the Homebrew, Scoop,
 and winget manifests.
 
 Exit test: each package manager installs the release on a clean host.
+
+Result: done for Homebrew and Scoop. winget waits for the review of
+Microsoft.
+
+- Version 0.1.0 is out, from the tag `v0.1.0` on commit `42b747f`, after CI
+  passed on that commit. The release workflow built nine files, hashed them,
+  attested each one, and opened a draft. Each checksum and each attestation
+  of the draft held before it was published.
+- The formula and the cask are in
+  [Stiven-Gjekaj/homebrew-tap](https://github.com/Stiven-Gjekaj/homebrew-tap),
+  and the manifest is in
+  [Stiven-Gjekaj/scoop-bucket](https://github.com/Stiven-Gjekaj/scoop-bucket).
+- `check-install.yml` ran on clean runners and passed:
+  - the checksum and the attestation of each of the nine files;
+  - `brew install stiven-gjekaj/tap/onyxdiskinfo` on macOS and on Linux,
+    and `onyx --version` gave `onyx 0.1.0`;
+  - `brew install --cask stiven-gjekaj/tap/onyxdiskinfo` on macOS: the app
+    is in /Applications, sealed, for both chips, at version 0.1.0;
+  - `scoop install stiven-gjekaj/onyxdiskinfo` on Windows: `onyx 0.1.0`,
+    `onyx list`, and the app.
+- The winget manifest went to winget-pkgs in
+  [pull request 450615](https://github.com/microsoft/winget-pkgs/pull/450615).
+  It validates against the JSON schemas of 1.12.0, and each download matches
+  its hash. The CLA is accepted on it.
+
+What the work found:
+
+- A test install from a local tap found two faults in the package scripts
+  before the release: the cask script added a stray `}` to an address, and
+  the winget script did not stop when a file was missing from the sums.
+- The app has no paid certificate. Installed through the cask, it waits for
+  the person to allow it once in Privacy & Security. Taking the quarantine
+  mark off is not enough on macOS 15 and later. The bundle carries an ad hoc
+  seal, so macOS does not call it damaged.
+- Homebrew 7 has no `--no-quarantine`.
+
+Open: winget. After Microsoft merges the pull request, run the install check
+with `-f winget=true`.
