@@ -197,5 +197,10 @@ jobs:
           components: clippy
           targets: x86_64-pc-windows-msvc, aarch64-apple-darwin
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # The history builds SQLite from its C source, and a Linux runner has
+      # no C compiler for the other two targets. Clippy does not link, so
+      # this tells the build to link a system SQLite and to compile no C.
+      # Each host job builds and tests the bundled SQLite natively.
+      - run: echo "LIBSQLITE3_SYS_USE_PKG_CONFIG=1" >> "$GITHUB_ENV"
       - run: cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings
       - run: cargo clippy --workspace --all-targets --locked --target aarch64-apple-darwin -- -D warnings
