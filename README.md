@@ -60,7 +60,7 @@ It has two faces that share one library:
 ## Screenshots
 
 The desktop app on the internal SSD of a MacBook Air. It follows the light or
-the dark scheme of the system. The serial number is masked.
+the dark scheme of the system.
 
 <p align="center">
   <img src="assets/screenshots/onyx-light.png" alt="OnyxDiskInfo in the light scheme" width="49%">
