@@ -169,27 +169,52 @@ fn prepare(device: &dyn Device, span: u64) -> Result<()> {
     Ok(())
 }
 
+/// Refuse a test file that would lose data or that is not the one to reuse.
+///
+/// A new test file must not exist. A file to reuse must exist and have the
+/// size of the test, as an earlier `--keep` left it.
+fn check_test_file(path: &Path, span: u64, reuse: bool) -> Result<()> {
+    let name = path.display().to_string();
+    match (std::fs::metadata(path), reuse) {
+        (Ok(_), false) => Err(Error::host(
+            name,
+            "the file exists. Name a new file, so that no data is lost, or give --reuse for a file that --keep left",
+        )),
+        (Err(_), true) => Err(Error::host(name, "there is no test file to reuse")),
+        (Ok(m), true) if m.len() != span => Err(Error::host(
+            name,
+            format!(
+                "the file holds {} bytes and the test is {span} bytes. Give the --size-mib of the run that kept it",
+                m.len()
+            ),
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// `onyx bench --file <path>`: read and write jobs in a test file, which
-/// goes at the end unless `keep` is true.
+/// goes at the end unless `keep` is true. With `reuse`, the file is one that
+/// an earlier `keep` left, and it is filled already.
 pub fn run_bench_file(
     path: &Path,
     size_mib: u64,
     seconds: u64,
     keep: bool,
+    reuse: bool,
     json: bool,
 ) -> Result<i32> {
-    if path.exists() {
-        return Err(Error::host(
-            path.display().to_string(),
-            "the file exists. Name a new file, so that no data is lost",
-        ));
-    }
     let span = size_mib * 1024 * 1024;
+    check_test_file(path, span, reuse)?;
     let file = open_test_file(path)?;
     file.set_len(span)?;
     let device = FileDevice::new(file, span, 4096);
-    eprintln!("Filling the test file of {}", human_size(span));
-    let result = prepare(&device, span).and_then(|()| run_jobs(&device, span, seconds, true));
+    let filled = if reuse {
+        Ok(())
+    } else {
+        eprintln!("Filling the test file of {}", human_size(span));
+        prepare(&device, span)
+    };
+    let result = filled.and_then(|()| run_jobs(&device, span, seconds, true));
     drop(device);
     let removed = if keep {
         Ok(())
@@ -330,4 +355,26 @@ pub fn run_write(target: &WriteTarget) -> Result<i32> {
         }
     }
     Ok(if report.bad_blocks > 0 { 2 } else { 0 })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_test_file_is_new_or_one_to_reuse_of_the_same_size() {
+        let path = std::env::temp_dir().join(format!("onyx-reuse-{}", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        assert!(check_test_file(&path, 4096, false).is_ok());
+        let e = check_test_file(&path, 4096, true).unwrap_err();
+        assert!(e.to_string().contains("no test file to reuse"), "{e}");
+
+        std::fs::write(&path, vec![0u8; 4096]).unwrap();
+        let e = check_test_file(&path, 4096, false).unwrap_err();
+        assert!(e.to_string().contains("--reuse"), "{e}");
+        assert!(check_test_file(&path, 4096, true).is_ok());
+        let e = check_test_file(&path, 8192, true).unwrap_err();
+        assert!(e.to_string().contains("holds 4096 bytes"), "{e}");
+        std::fs::remove_file(&path).unwrap();
+    }
 }

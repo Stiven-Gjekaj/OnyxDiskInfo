@@ -57,6 +57,11 @@ pub enum Command {
         /// the same file.
         #[arg(long, conflicts_with = "drive")]
         keep: bool,
+        /// Use the test file that an earlier `--keep` left, and write over
+        /// it. Its size must be the size of the test. Another tool can then
+        /// measure the same file before Onyx and after it.
+        #[arg(long, conflicts_with = "drive")]
+        reuse: bool,
         /// How long each job runs, in seconds.
         #[arg(long, default_value_t = 5)]
         seconds: u64,
@@ -233,6 +238,8 @@ mod tests {
         assert!(Cli::try_parse_from(["onyx", "bench", "2", "--size-mib", "8"]).is_err());
         assert!(Cli::try_parse_from(["onyx", "bench", "2", "--keep"]).is_err());
         assert!(Cli::try_parse_from(["onyx", "bench", "--file", "/tmp/x", "--keep"]).is_ok());
+        assert!(Cli::try_parse_from(["onyx", "bench", "--file", "/tmp/x", "--reuse"]).is_ok());
+        assert!(Cli::try_parse_from(["onyx", "bench", "2", "--reuse"]).is_err());
     }
 
     #[test]

@@ -32,12 +32,18 @@ pub fn run() -> i32 {
             file,
             size_mib,
             keep,
+            reuse,
             seconds,
             json,
         } => match (drive, file) {
-            (_, Some(path)) => {
-                disk_tests::run_bench_file(&path, size_mib.unwrap_or(1024), seconds, keep, json)
-            }
+            (_, Some(path)) => disk_tests::run_bench_file(
+                &path,
+                size_mib.unwrap_or(1024),
+                seconds,
+                keep,
+                reuse,
+                json,
+            ),
             (Some(number), None) => disk_tests::run_bench_drive(number, seconds, json),
             (None, None) => unreachable!("clap requires a drive or a file"),
         },
