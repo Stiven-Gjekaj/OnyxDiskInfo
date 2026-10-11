@@ -17,6 +17,7 @@ mod record;
 mod report;
 mod safety;
 mod size;
+pub mod snapshot;
 
 pub use drive::{Bus, Connection, DriveId, DriveInfo};
 pub use error::{Error, Result};
