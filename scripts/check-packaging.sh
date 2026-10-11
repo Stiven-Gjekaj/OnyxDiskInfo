@@ -34,6 +34,10 @@ scripts/homebrew-cask.sh "$version" "$work/SHA256SUMS" > "$work/cask.rb"
 grep -q 'cask "onyxdiskinfo" do' "$work/cask.rb"
 grep -q "version \"${version}\"" "$work/cask.rb"
 grep -q 'app "OnyxDiskInfo.app"' "$work/cask.rb"
+grep -q 'url "https://github.com/Stiven-Gjekaj/OnyxDiskInfo/releases/download/v#{version}/OnyxDiskInfo-#{version}-macos-universal.zip"' "$work/cask.rb"
+# A test gives its own address, and each script must take it as it is.
+scripts/homebrew-cask.sh "$version" "$work/SHA256SUMS" "file:///tmp/dist" | grep -q 'url "file:///tmp/dist/OnyxDiskInfo-#{version}-macos-universal.zip"'
+scripts/homebrew-formula.sh "$version" "$work/SHA256SUMS" "file:///tmp/dist" | grep -q 'url "file:///tmp/dist/onyx-9.8.7-aarch64-apple-darwin"'
 
 if command -v ruby >/dev/null 2>&1; then
     ruby -c "$work/formula.rb" > /dev/null

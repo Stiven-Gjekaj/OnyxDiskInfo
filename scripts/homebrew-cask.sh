@@ -14,7 +14,10 @@ source "$(dirname "$0")/package-lib.sh"
 USAGE="usage: homebrew-cask.sh <version> <SHA256SUMS> [base-url]"
 VERSION="${1:?$USAGE}"
 SUMS="${2:?$USAGE}"
-BASE="${3:-https://github.com/Stiven-Gjekaj/OnyxDiskInfo/releases/download/v#{version}}"
+# The address keeps "#{version}" for Ruby. It goes into a variable first,
+# because the "}" in it would end a ${3:-...} of the shell.
+LATER='https://github.com/Stiven-Gjekaj/OnyxDiskInfo/releases/download/v#{version}'
+BASE="${3:-$LATER}"
 
 FILE="OnyxDiskInfo-${VERSION}-macos-universal.zip"
 SHA="$(digest "$SUMS" "$FILE")"
@@ -38,8 +41,10 @@ cask "onyxdiskinfo" do
   zap trash: "~/Library/Application Support/OnyxDiskInfo"
 
   caveats <<~EOS
-    No paid certificate signed OnyxDiskInfo, so macOS can refuse to open it.
-    Take the mark off after the install:
+    No paid certificate signed OnyxDiskInfo, so macOS asks before it opens
+    the app the first time. If macOS says that it cannot check the app, open
+    System Settings, then Privacy & Security, and choose Open Anyway. Or take
+    the mark off after the install:
 
       xattr -dr com.apple.quarantine #{appdir}/OnyxDiskInfo.app
 
