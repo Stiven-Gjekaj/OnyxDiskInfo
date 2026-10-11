@@ -18,7 +18,8 @@ The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
 open, because no SATA drive is at hand.
 P3 is done but for its first half, which needs a SATA drive in a USB case.
 P4 is done but for its benchmark half, which is partly proven.
-P5 is done. P6 is next.
+P5 is done. P6 is done but for the erase commands of the firmware, which
+wait for a drive to test them. P7 is next.
 
 ```mermaid
 flowchart LR
@@ -235,6 +236,46 @@ Work:
 
 Exit test: each host mounts each file system that Onyx writes.
 A file system that Onyx writes passes `fsck` on Linux.
+
+Result: done for the table, the format, the overwrite, and the TRIM.
+
+- `scripts/check-format.py` formats an image with `onyx format` for each
+  table and each file system that the host can write. The host attaches it,
+  checks it with its own tool, mounts it, writes a file, reads the file back,
+  and checks it again. CI runs it on each host, and all 37 layouts passed:
+  - Linux: FAT12, FAT16, FAT32, exFAT, NTFS, ext4, btrfs, and XFS, on MBR
+    and on GPT. `fsck.fat`, `fsck.exfat`, `ntfsfix`, `fsck.ext4`,
+    `btrfs check`, and `xfs_repair` found no fault, before and after the
+    write.
+  - macOS: FAT12, FAT16, FAT32, exFAT, and HFS+ on MBR and on GPT, and APFS
+    on GPT. `fsck_msdos`, `fsck_exfat`, and `diskutil verifyVolume` found
+    no fault.
+  - Windows: FAT12, FAT16, FAT32, exFAT, and NTFS on MBR and on GPT, in a
+    VHD. `chkdsk` found no fault. NTFS went through `onyx format` on the
+    mounted VHD, by its number in `onyx list`.
+- `scripts/check-erase.py` attaches an image of 0xA5 bytes as a disk on each
+  host. `onyx erase --pass random --pass zero` left only zeros, with no bad
+  block, on all three. After `onyx erase --trim`, 64 of 64 sample blocks
+  read zeros from the loop device of Linux, and 0 of 64 from the disk images
+  of macOS and Windows, which take the TRIM and keep the bytes. Onyx prints
+  that count.
+
+What the work found:
+
+- `fatfs` writes the FAT type that the size gives, and not the one that it
+  is asked for. A FAT12 of 1 GiB came out as FAT16. Onyx now finds the type
+  in a dry run and refuses before it writes.
+- A flush on a macOS disk node failed with `ENOTTY`. `sync_all` sends
+  `F_FULLFSYNC`, which only a file system takes. So the write test counted a
+  bad block, and the capacity test stopped, on every macOS drive. Onyx now
+  sends `DKIOCSYNCHRONIZECACHE` to a disk node.
+- A benchmark job could end with no command and a speed of zero, when the
+  host started a worker after the time of the job was up. Each worker now
+  sends one command at least. A Windows runner found it.
+
+Open: ATA Secure Erase, NVMe Format, and NVMe Sanitize. They need a drive
+that can be erased to test them, and none is at hand.
+[milestones.md](milestones.md) says why they wait.
 
 ## P7: history and alerts
 
