@@ -22,3 +22,6 @@ Thumbs.db
 .idea/
 .vscode/
 .claude/
+
+# The checksums of a release, which docs/releasing.md downloads here.
+/release/
