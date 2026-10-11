@@ -1,0 +1,269 @@
+# Builds the files of a release, and publishes them only from a tag.
+#
+# A run started by hand builds every file and computes every checksum, and it
+# publishes nothing. That is the way to test this file without a release.
+#
+# The job that publishes is the only job that holds a write token, and it runs
+# only for a tag. The attestation is made there too. On a public repository an
+# attestation goes into the public Sigstore log, so a test run makes none.
+#
+# The files of a release:
+#
+# - onyx-<version>-<target>[.exe]: the command line, one binary for each of
+#   six targets.
+# - OnyxDiskInfo-<version>-macos-universal.zip: OnyxDiskInfo.app, for Apple
+#   silicon and Intel, with `onyx` inside it.
+# - OnyxDiskInfo-<version>-<target>.zip: OnyxDiskInfo.exe and onyx.exe, for
+#   Windows on x86_64 and on arm64. Scoop and winget install this file.
+# - SHA256SUMS.
+#
+# Every action is pinned to the commit of a release, for the reason that
+# ci.yml gives.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cli:
+    name: onyx for ${{ matrix.target }}
+    strategy:
+      # A release that lacks one host is not a release. Stop at the first
+      # failure rather than publish five binaries out of six.
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.97.1
+          targets: ${{ matrix.target }}
+
+      # The history builds SQLite from its C source, and a musl target needs
+      # the C compiler of musl for it. The binary then carries its C library
+      # and runs on any distribution.
+      - name: install the C compiler of musl
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      # --locked builds the dependency versions that Cargo.lock names and
+      # refuses to change them. A release is the build that matters most, so
+      # it gets no freedom that the gate did not have.
+      - name: build
+        run: cargo build --release --locked -p onyx --target ${{ matrix.target }}
+
+      - name: collect
+        shell: bash
+        run: |
+          mkdir out
+          suffix=""
+          case "${{ matrix.target }}" in *windows*) suffix=".exe" ;; esac
+          cp "target/${{ matrix.target }}/release/onyx${suffix}" "out/onyx-${{ matrix.target }}${suffix}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-${{ matrix.target }}
+          path: out/
+          if-no-files-found: error
+
+  app-macos:
+    name: OnyxDiskInfo.app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.97.1
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: build for Apple silicon and for Intel
+        run: |
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --locked -p onyx -p onyx-gui --target "$target"
+          done
+
+      # One binary that holds both, so one download runs on each Mac.
+      - name: join the two builds
+        run: |
+          mkdir -p universal
+          for name in OnyxDiskInfo onyx; do
+            lipo -create -output "universal/$name" \
+              "target/aarch64-apple-darwin/release/$name" \
+              "target/x86_64-apple-darwin/release/$name"
+            lipo -info "universal/$name"
+          done
+
+      - name: bundle
+        run: |
+          mkdir -p out
+          scripts/bundle-macos.sh universal/OnyxDiskInfo universal/onyx out
+          ditto -c -k --keepParent out/OnyxDiskInfo.app out/OnyxDiskInfo-macos-universal.zip
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: app-macos
+          path: out/OnyxDiskInfo-macos-universal.zip
+          if-no-files-found: error
+
+  app-windows:
+    name: OnyxDiskInfo for ${{ matrix.target }}
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.97.1
+          targets: ${{ matrix.target }}
+
+      - name: build
+        run: cargo build --release --locked -p onyx -p onyx-gui --target ${{ matrix.target }}
+
+      # The app runs `onyx` from its own folder, so the two go side by side.
+      - name: package
+        shell: pwsh
+        run: |
+          $dir = "out/OnyxDiskInfo"
+          New-Item -ItemType Directory -Path $dir | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/OnyxDiskInfo.exe" $dir
+          Copy-Item "target/${{ matrix.target }}/release/onyx.exe" $dir
+          Copy-Item LICENSE, TERMS.md, README.md $dir
+          Compress-Archive -Path $dir -DestinationPath "out/OnyxDiskInfo-${{ matrix.target }}.zip"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: app-${{ matrix.target }}
+          path: out/OnyxDiskInfo-${{ matrix.target }}.zip
+          if-no-files-found: error
+
+  checksums:
+    name: name the files and hash them
+    needs: [cli, app-macos, app-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # For `cargo metadata`, which reads the version the way Cargo does and
+      # not the way a pattern over the text would.
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.97.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: built/
+          merge-multiple: true
+
+      # One machine hashes every file, so every checksum comes from the same
+      # tool and nobody has to trust several.
+      - name: name and hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "onyx") | .version')
+          mkdir dist
+          for file in built/*; do
+            name=$(basename "$file")
+            case "$name" in
+              onyx-*) cp "$file" "dist/onyx-${version}-${name#onyx-}" ;;
+              OnyxDiskInfo-*) cp "$file" "dist/OnyxDiskInfo-${version}-${name#OnyxDiskInfo-}" ;;
+              *) echo "an unknown file: $name" >&2; exit 1 ;;
+            esac
+          done
+          cd dist
+          sha256sum onyx-* OnyxDiskInfo-* > SHA256SUMS
+          cat SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" = 9
+          echo "${version}" > ../VERSION
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: |
+            dist/
+            VERSION
+          if-no-files-found: error
+
+  release:
+    name: publish a draft release
+    needs: checksums
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: .
+
+      # A tag that disagrees with the version in Cargo.toml gives a binary
+      # whose --version names a release it does not belong to.
+      - name: check that the tag names the version
+        shell: bash
+        run: |
+          version=$(cat VERSION)
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "The tag is ${GITHUB_REF_NAME} and Cargo.toml says ${version}." >&2
+            exit 1
+          fi
+
+      # The notes are the part of CHANGELOG.md for this version.
+      - name: write the notes
+        shell: bash
+        run: |
+          version=$(cat VERSION)
+          awk -v v="$version" '
+            $0 ~ "^## " v "( |$)" { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/onyx-*
+            dist/OnyxDiskInfo-*
+
+      # A draft, so that a person reads the assets before anybody else can
+      # download them. This tool formats and erases drives.
+      - name: open the draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --draft \
+            --title "OnyxDiskInfo ${GITHUB_REF_NAME}" \
+            --notes-file notes.md
