@@ -133,7 +133,14 @@ USB case.
 - Done: SAT through `SG_IO` on Linux and through `IOCTL_SCSI_PASS_THROUGH`
   on Windows.
 - Open: a SATA drive in a USB case, which is the first half of the exit
-  test. No such drive was at hand.
+  test. On 2026-10-11 a Kingston SA400S37240 in a VIA VL715 case (USB
+  2109:0715) was at hand, on the Mac only. macOS gives no program a SAT
+  path to a USB disk without a driver, and smartctl failed there too. A
+  Fedora VM in UTM took the case by USB pass-through, and `onyx list` showed
+  the drive with the serial and the firmware that macOS shows. Then the
+  first read of the kernel timed out, over UAS and over usb-storage, and the
+  bridge reset again and again. Neither tool reached the drive. The test
+  needs Linux or Windows on real hardware.
 - Done: a real USB flash drive. On 2026-10-10, `sudo onyx health 2` on macOS
   read a 125.8 GB USB stick (VendorCo ProductCode, firmware 2.00). It has no
   SMART, and it got a measured record: 64 reads, no failure, a median of
