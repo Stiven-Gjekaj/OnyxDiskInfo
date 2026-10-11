@@ -136,13 +136,14 @@ jobs:
         if: runner.os == 'Windows'
         run: python scripts/check-gui.py target/debug/OnyxDiskInfo.exe target/debug/onyx.exe --headless
 
-      # The exit test of P6 for the file systems that Onyx writes. Onyx
-      # formats an image with each table and each file system, and the host
+      # The exit test of P6 for `onyx format`. Onyx formats an image with
+      # each table and each file system that the host can write, and the host
       # checks it with its own tool, mounts it, and writes a file to it.
-      - name: install the check tools of FAT and exFAT on Linux
+      - name: install the tools of each file system on Linux
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs
+          sudo apt-get update
+          sudo apt-get install -y dosfstools exfatprogs ntfs-3g btrfs-progs xfsprogs
           # The kernel of the runner finds no exFAT driver until the extra
           # modules of that kernel are in.
           if ! sudo modprobe exfat; then
