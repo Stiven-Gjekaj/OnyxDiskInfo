@@ -330,16 +330,26 @@ impl Store {
 
     /// The newest alerts of every drive, at most `limit`, the newest first.
     pub fn alerts(&self, limit: usize) -> Result<Vec<StoredAlert>> {
+        self.alerts_where(None, limit)
+    }
+
+    /// The newest alerts of one drive, at most `limit`, the newest first.
+    pub fn alerts_of(&self, key: &str, limit: usize) -> Result<Vec<StoredAlert>> {
+        self.alerts_where(Some(key), limit)
+    }
+
+    fn alerts_where(&self, key: Option<&str>, limit: usize) -> Result<Vec<StoredAlert>> {
         let mut q = self
             .db
             .prepare(
                 "SELECT d.key, d.model, r.taken_at, a.severity, a.value, a.message
                  FROM alert a JOIN reading r ON r.id = a.reading JOIN drive d ON d.id = r.drive
-                 ORDER BY r.taken_at DESC, a.id DESC LIMIT ?1",
+                 WHERE ?1 IS NULL OR d.key = ?1
+                 ORDER BY r.taken_at DESC, a.id DESC LIMIT ?2",
             )
             .map_err(fail)?;
         let rows = q
-            .query_map([limit as i64], |r| {
+            .query_map(params![key, limit as i64], |r| {
                 let severity: String = r.get(3)?;
                 Ok(StoredAlert {
                     drive: r.get(0)?,
@@ -468,6 +478,26 @@ mod tests {
         assert_eq!(stored[0].taken_at, 2000);
         assert_eq!(stored[0].model, "KINGSTON SA400S37240G");
         assert_eq!(stored[0].alert, alerts[0]);
+    }
+
+    #[test]
+    fn the_alerts_of_one_drive_leave_out_the_others() {
+        let mut s = Store::in_memory().unwrap();
+        let other = Drive::new("APPLE SSD", Some("SERIALMASKED0002"), "disk0");
+        for (drive, at) in [
+            (kingston(), 1),
+            (other.clone(), 1),
+            (kingston(), 2),
+            (other, 2),
+        ] {
+            let count = if at == 1 { 0 } else { 5 };
+            s.add(&drive, at, &reading(Verdict::Good, &[("ata.5.raw", count)]))
+                .unwrap();
+        }
+        assert_eq!(s.alerts(10).unwrap().len(), 2);
+        let mine = s.alerts_of(&kingston().key, 10).unwrap();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].drive, kingston().key);
     }
 
     #[test]
