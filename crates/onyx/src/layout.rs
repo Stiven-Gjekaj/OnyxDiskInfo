@@ -174,6 +174,11 @@ fn host_linux(
         }
     };
     let partition = host_tool::linux_partition(&disk);
+    // udev can remove the node of a new partition and make it again after
+    // the kernel makes it. mkfs then finds no node. So wait until udev has
+    // handled each event first. A host with no udevadm has no udev to wait
+    // for.
+    let _ = run_tool(&tool("udevadm", &["settle", "--timeout=10"]));
     let result = wait_for(&partition)
         .and_then(|()| host_tool::linux_mkfs(fs, &partition, label))
         .and_then(|mkfs| run_tool(&mkfs));
