@@ -81,7 +81,7 @@ impl VerifyReport {
 }
 
 /// The blocks of a device: each offset and length, in whole sectors.
-fn blocks(device: &dyn Device) -> Vec<(u64, u64)> {
+pub(crate) fn blocks(device: &dyn Device) -> Vec<(u64, u64)> {
     let total = device.size();
     let sector = u64::from(device.sector_size().max(1));
     let mut out = Vec::new();

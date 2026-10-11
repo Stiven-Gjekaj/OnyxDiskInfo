@@ -9,6 +9,7 @@
 pub mod bench;
 pub mod capacity;
 mod device;
+pub mod erase;
 pub mod scan;
 pub mod verify;
 
