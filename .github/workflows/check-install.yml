@@ -73,10 +73,15 @@ jobs:
           set -euo pipefail
           brew install --cask stiven-gjekaj/tap/onyxdiskinfo
           app=/Applications/OnyxDiskInfo.app
-          test -x "$app/Contents/MacOS/OnyxDiskInfo"
-          "$app/Contents/MacOS/onyx" --version | grep -qx "onyx ${VERSION}"
+          # The check does not start the app: no paid certificate signs it,
+          # so macOS can wait for a person before the first start. The
+          # formula above runs the same `onyx`.
+          codesign --verify --deep --strict "$app"
           defaults read "$app/Contents/Info.plist" CFBundleShortVersionString | grep -qx "${VERSION}"
-          echo "OnyxDiskInfo.app ${VERSION} is in /Applications"
+          for name in OnyxDiskInfo onyx; do
+            lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/$name"
+          done
+          echo "OnyxDiskInfo.app ${VERSION} is in /Applications, sealed, for both chips"
 
   windows:
     name: Scoop and winget
