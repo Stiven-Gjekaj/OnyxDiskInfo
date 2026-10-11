@@ -12,11 +12,11 @@ Do not start a phase until the phase it depends on passes its exit test.
 Each phase is many small commits.
 
 P0 and P1 are done. `onyx list` runs on Windows, on macOS, and on Linux.
-P2 passes its exit test for NVMe drives. The SATA half waits for a SATA
-drive.
+P2 passes its exit test for NVMe drives, and for a SATA drive on Windows.
 The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
 open, because no SATA drive is at hand.
-P3 is done but for its first half, which needs a SATA drive in a USB case.
+P3 is done on Windows. A SATA drive in a USB case waits for Linux and
+macOS.
 P4 is done but for its benchmark half, which is partly proven.
 P5 is done. P6 is done but for the erase commands of the firmware, which
 wait for a drive to test them. P7 is next.
@@ -98,13 +98,26 @@ Result for NVMe: done.
 The decoder test of the NVMe health log and of Identify Controller uses the
 bytes of the APPLE SSD, captured with `smartctl -r ioctl,2`.
 
+Result for SATA: done on Windows.
+On 2026-10-11 a KINGSTON SA400S37240G, firmware S3Z40107, in a VIA VL715 USB
+case was read on Windows 11 Pro, as Administrator. `onyx health` read it
+through SAT and `IOCTL_SCSI_PASS_THROUGH`: source bridge, confidence high,
+verdict Good, 26 attributes. `scripts/check-health.py` compared it with
+`smartctl -x -d sat`, and each value agreed. The decoder test reads the
+IDENTIFY DEVICE, SMART READ DATA, and SMART READ THRESHOLDS blocks of that
+drive, captured with `smartctl -r ioctl,2`, with the serial number masked.
+
 Open for SATA:
 
-- No SATA drive was at hand. The ATA decoders are tested against blocks
-  built from the ACS layout, and not against a captured dump.
-- The Linux and the Windows shims send IDENTIFY DEVICE and the SMART reads
-  through ATA PASS-THROUGH. No SATA drive has answered them yet.
-- macOS has no ATA path yet. It needs `IOATASMARTInterface`.
+- Linux sends the same commands through `SG_IO`. No SATA drive has answered
+  them on Linux yet. A VM could not take the drive: the USB pass-through of
+  UTM reset the bridge again and again.
+- macOS has no ATA path yet. It needs `IOATASMARTInterface`, and for a USB
+  case a SAT driver that the person installs.
+- `onyx list` on Windows shows what the bridge says: the model without its
+  last letter, the serial number of the bridge, and four characters of the
+  firmware. `onyx health` shows what the drive says. The list asks no drive
+  through pass-through, because that needs administrator rights.
 
 ## P3: disks without SMART
 
@@ -132,15 +145,14 @@ USB case.
   smartctl reads and Onyx does not.
 - Done: SAT through `SG_IO` on Linux and through `IOCTL_SCSI_PASS_THROUGH`
   on Windows.
-- Open: a SATA drive in a USB case, which is the first half of the exit
-  test. On 2026-10-11 a Kingston SA400S37240 in a VIA VL715 case (USB
+- Done on Windows: a SATA drive in a USB case, which is the first half of
+  the exit test. P2 above gives the result. Before it, on 2026-10-11 a Kingston SA400S37240 in a VIA VL715 case (USB
   2109:0715) was at hand, on the Mac only. macOS gives no program a SAT
   path to a USB disk without a driver, and smartctl failed there too. A
   Fedora VM in UTM took the case by USB pass-through, and `onyx list` showed
   the drive with the serial and the firmware that macOS shows. Then the
   first read of the kernel timed out, over UAS and over usb-storage, and the
-  bridge reset again and again. Neither tool reached the drive. The test
-  needs Linux or Windows on real hardware.
+  bridge reset again and again. Neither tool reached the drive there.
 - Done: a real USB flash drive. On 2026-10-10, `sudo onyx health 2` on macOS
   read a 125.8 GB USB stick (VendorCo ProductCode, firmware 2.00). It has no
   SMART, and it got a measured record: 64 reads, no failure, a median of
