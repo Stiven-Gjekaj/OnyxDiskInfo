@@ -1,0 +1,119 @@
+# The exit test of P8: each package manager installs the release on a clean
+# host, and the files of the release carry the attestation of this
+# repository.
+#
+# Start it by hand after a release is published and its manifests are in the
+# tap, the bucket, and winget-pkgs. It installs the way a person does, from
+# the public channels, and it changes nothing anywhere.
+#
+# winget-pkgs takes days to review a new package, so winget is a choice of
+# its own.
+#
+# Every action is pinned to the commit of a release, for the reason that
+# ci.yml gives.
+
+name: check-install
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version of the release, such as 0.1.0"
+        required: true
+      winget:
+        description: "Install from winget too. Only after winget-pkgs took the manifest."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  attestation:
+    name: the attestation of each file
+    runs-on: ubuntu-latest
+    steps:
+      - name: download the release and check each file
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gh release download "v${VERSION}" --repo "${GITHUB_REPOSITORY}" --dir dist
+          cd dist
+          sha256sum --check SHA256SUMS
+          for file in onyx-* OnyxDiskInfo-*; do
+            gh attestation verify "$file" --repo "${GITHUB_REPOSITORY}" > /dev/null
+            echo "$file: the attestation of ${GITHUB_REPOSITORY} holds"
+          done
+
+  homebrew:
+    name: Homebrew on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: install the command line from the tap
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          eval "$(brew shellenv 2>/dev/null || /home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install stiven-gjekaj/tap/onyxdiskinfo
+          onyx --version | tee version.txt
+          grep -qx "onyx ${VERSION}" version.txt
+          onyx list
+      - name: install the app from the tap
+        if: runner.os == 'macOS'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          brew install --cask stiven-gjekaj/tap/onyxdiskinfo
+          app=/Applications/OnyxDiskInfo.app
+          test -x "$app/Contents/MacOS/OnyxDiskInfo"
+          "$app/Contents/MacOS/onyx" --version | grep -qx "onyx ${VERSION}"
+          defaults read "$app/Contents/Info.plist" CFBundleShortVersionString | grep -qx "${VERSION}"
+          echo "OnyxDiskInfo.app ${VERSION} is in /Applications"
+
+  windows:
+    name: Scoop and winget
+    runs-on: windows-latest
+    steps:
+      - name: install from the bucket with Scoop
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # The runner is an Administrator, and Scoop installs for one person
+          # unless it is told that this is on purpose.
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install-scoop.ps1
+          ./install-scoop.ps1 -RunAsAdmin
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          scoop bucket add stiven https://github.com/Stiven-Gjekaj/scoop-bucket
+          scoop install stiven/onyxdiskinfo
+          $got = onyx --version
+          if ($got -ne "onyx $env:VERSION") { throw "onyx --version says $got" }
+          onyx list
+          $app = Join-Path (scoop prefix onyxdiskinfo) 'OnyxDiskInfo.exe'
+          if (-not (Test-Path $app)) { throw "Scoop did not install $app" }
+          "Scoop installed onyx $env:VERSION and the app"
+          scoop uninstall onyxdiskinfo
+
+      - name: install with winget
+        if: inputs.winget
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          winget install --id Stiven-Gjekaj.OnyxDiskInfo --exact --version $env:VERSION `
+            --accept-source-agreements --accept-package-agreements --disable-interactivity
+          $links = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
+          $got = & (Join-Path $links 'onyx.exe') --version
+          if ($got -ne "onyx $env:VERSION") { throw "onyx --version says $got" }
+          if (-not (Test-Path (Join-Path $links 'OnyxDiskInfo.exe'))) { throw "winget made no OnyxDiskInfo command" }
+          "winget installed onyx $env:VERSION and the app"
