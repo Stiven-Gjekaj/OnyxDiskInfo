@@ -14,6 +14,41 @@ use rusqlite::{Connection, OptionalExtension, params};
 /// The version of the schema. A new one adds a step to [`migrate`].
 const SCHEMA: i64 = 1;
 
+/// The file name of the history.
+const FILE: &str = "history.sqlite";
+
+/// Where the history goes for this person, on a host named as
+/// `std::env::consts::OS` names it, from the environment that `var` reads.
+///
+/// - macOS: `~/Library/Application Support/OnyxDiskInfo`
+/// - Windows: `%LOCALAPPDATA%\OnyxDiskInfo`
+/// - Linux and others: `$XDG_DATA_HOME/onyxdiskinfo`, or
+///   `~/.local/share/onyxdiskinfo`
+///
+/// `sudo` can give root a home of its own, so a history written with
+/// `sudo` can be in the home of root. `--db` names a file in place of it.
+pub fn default_path_for(
+    os: &str,
+    var: impl Fn(&str) -> Option<String>,
+) -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let set = |name: &str| var(name).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let dir = match os {
+        "macos" => set("HOME")?.join("Library/Application Support/OnyxDiskInfo"),
+        "windows" => set("LOCALAPPDATA")?.join("OnyxDiskInfo"),
+        _ => match set("XDG_DATA_HOME") {
+            Some(data) => data.join("onyxdiskinfo"),
+            None => set("HOME")?.join(".local/share/onyxdiskinfo"),
+        },
+    };
+    Some(dir.join(FILE))
+}
+
+/// Where the history goes on this host, for the person who runs Onyx.
+pub fn default_path() -> Option<std::path::PathBuf> {
+    default_path_for(std::env::consts::OS, |name| std::env::var(name).ok())
+}
+
 /// The drive that a reading belongs to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Drive {
@@ -374,6 +409,38 @@ mod tests {
             Some("SERIALMASKED0001"),
             "/dev/sdb",
         )
+    }
+
+    #[test]
+    fn the_history_goes_where_each_host_keeps_the_data_of_an_app() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == name)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        let path = |os, pairs| default_path_for(os, env(pairs)).map(|p| p.display().to_string());
+        assert_eq!(
+            path("macos", &[("HOME", "/Users/a")]).as_deref(),
+            Some("/Users/a/Library/Application Support/OnyxDiskInfo/history.sqlite")
+        );
+        assert!(
+            path("windows", &[("LOCALAPPDATA", r"C:\Users\a\AppData\Local")])
+                .unwrap()
+                .ends_with("history.sqlite")
+        );
+        assert_eq!(
+            path("linux", &[("HOME", "/home/a")]).as_deref(),
+            Some("/home/a/.local/share/onyxdiskinfo/history.sqlite")
+        );
+        assert_eq!(
+            path("linux", &[("HOME", "/home/a"), ("XDG_DATA_HOME", "/data")]).as_deref(),
+            Some("/data/onyxdiskinfo/history.sqlite")
+        );
+        assert_eq!(path("linux", &[("HOME", "")]), None);
+        assert_eq!(path("windows", &[]), None);
     }
 
     #[test]
