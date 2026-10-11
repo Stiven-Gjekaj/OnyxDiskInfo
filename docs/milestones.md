@@ -212,6 +212,54 @@ erases wait, as the SATA half of P2 does.
 
 ---
 
+## The history and the alerts
+
+**A reading is a flat list of names and numbers.** `onyx-core` turns each
+health record into it, for NVMe, ATA, eMMC, and a measured drive alike. The
+history keeps the list, and the alert rules compare two lists. Neither needs
+to know a protocol. The names are part of the file format: a name never
+changes, and a new value gets a new name.
+
+**A drive is known by its model and its serial number.** Its number in the
+list and its node change when it moves to another port. A drive with no
+serial number is known by its node.
+
+**An alert says that something changed that a person must know.** It is
+not a change of any value:
+
+- The verdict got worse. Bad is critical, and Caution is a warning.
+- A count of damage went up: reallocated, pending, and uncorrectable
+  sectors, CRC errors, program and erase fails, NVMe media errors, minutes
+  above the temperature limits of the drive, failed reads of a measured
+  drive, and the end-of-life state of an eMMC chip.
+- The drive set a new bit of the NVMe critical warning.
+- The wear passed 50, 80, 90, or 100 percent.
+
+The temperature, the hours, and the data written move all the time. They
+make no alert, and the history keeps them for the charts.
+
+**The history file is in the data folder of the person.** That is
+`~/Library/Application Support/OnyxDiskInfo` on macOS, `%LOCALAPPDATA%` on
+Windows, and `$XDG_DATA_HOME` or `~/.local/share` on Linux. `sudo` can give
+root a home of its own, so a command that runs with `sudo` takes `--db` to
+name the same file.
+
+**SQLite is built in on each host.** The checks of the other targets in CI
+compile no C, so they link a system SQLite, which a check never links.
+
+**The tray comes from Slint.** Slint 1.18 has `SystemTrayIcon` on all three
+hosts. With a tray, a closed window hides, and the app reads the drives each
+hour. A test with no display has no tray.
+
+Options that lost:
+
+- An alert for each change. The temperature changes at each reading, and a
+  person soon stops reading alerts.
+- A table of columns for each protocol. Each new value would change the
+  schema.
+
+---
+
 ## The order of the work
 
 **The command line comes first. The desktop app comes in phase 5.**
