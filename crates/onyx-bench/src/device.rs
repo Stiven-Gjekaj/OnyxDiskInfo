@@ -95,12 +95,16 @@ impl Device for MemoryDevice {
     }
 }
 
+/// How a device waits until each write is on the medium.
+pub type Flush = fn(&File) -> io::Result<()>;
+
 /// A device on an open file: a drive that the host opened, or an image.
 #[derive(Debug)]
 pub struct FileDevice {
     file: File,
     size: u64,
     sector: u32,
+    flush: Flush,
 }
 
 impl FileDevice {
@@ -108,7 +112,20 @@ impl FileDevice {
     /// that the drive list reported. A device file reports no size of its
     /// own on every host, so the caller gives it.
     pub fn new(file: File, size: u64, sector: u32) -> Self {
-        FileDevice { file, size, sector }
+        FileDevice {
+            file,
+            size,
+            sector,
+            flush: File::sync_all,
+        }
+    }
+
+    /// Flush with `flush` in place of `sync_all`. A drive on macOS refuses
+    /// the request that `sync_all` sends there, and the host shim gives one
+    /// that the drive takes.
+    pub fn with_flush(mut self, flush: Flush) -> Self {
+        self.flush = flush;
+        self
     }
 }
 
@@ -133,7 +150,7 @@ impl Device for FileDevice {
     }
 
     fn flush(&self) -> io::Result<()> {
-        self.file.sync_all()
+        (self.flush)(&self.file)
     }
 }
 
@@ -176,7 +193,7 @@ impl Device for FileDevice {
     }
 
     fn flush(&self) -> io::Result<()> {
-        self.file.sync_all()
+        (self.flush)(&self.file)
     }
 }
 
@@ -271,5 +288,22 @@ mod tests {
             assert_eq!(b.bytes().as_ptr() as usize % ALIGN, 0);
             assert_eq!(b.bytes_mut().len(), length);
         }
+    }
+
+    #[test]
+    fn a_file_device_flushes_with_the_flush_that_it_is_given() {
+        fn refuse(_: &File) -> io::Result<()> {
+            Err(io::Error::other("the flush of the test"))
+        }
+        let path = std::env::temp_dir().join(format!("onyx-flush-{}", std::process::id()));
+        let file = File::create(&path).unwrap();
+        let plain = FileDevice::new(file.try_clone().unwrap(), 0, 512);
+        assert!(plain.flush().is_ok());
+        let given = FileDevice::new(file, 0, 512).with_flush(refuse);
+        assert_eq!(
+            given.flush().unwrap_err().to_string(),
+            "the flush of the test"
+        );
+        std::fs::remove_file(&path).unwrap();
     }
 }

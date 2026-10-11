@@ -60,6 +60,18 @@ pub fn open_drive(drive: &DriveInfo, access: Access) -> Result<OpenDrive> {
     }
 }
 
+/// Wait until each write to a drive or an image is on the medium.
+pub fn flush(file: &File) -> std::io::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos::open::flush(file)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        file.sync_all()
+    }
+}
+
 /// Create a test file for a benchmark, or open the one there, without the
 /// cache of the host.
 ///

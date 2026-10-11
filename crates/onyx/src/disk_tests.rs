@@ -33,7 +33,8 @@ pub(crate) fn device(drive: &DriveInfo, file: &std::fs::File) -> Result<FileDevi
         file.try_clone()?,
         drive.size_bytes,
         drive.logical_sector_size,
-    ))
+    )
+    .with_flush(onyx_probe::open::flush))
 }
 
 /// A value that changes from run to run, to mark the blocks of one run.

@@ -76,3 +76,26 @@ pub fn no_cache(file: &File) -> Result<()> {
     }
     Ok(())
 }
+
+/// `DKIOCSYNCHRONIZECACHE`: `_IO('d', 22)`. It asks the drive to write its
+/// cache to the medium.
+const DKIOCSYNCHRONIZECACHE: libc::c_ulong = 0x2000_0000 | ((b'd' as libc::c_ulong) << 8) | 22;
+
+/// Wait until each write is on the medium.
+///
+/// `sync_all` sends `F_FULLFSYNC`, which a file system takes and a disk node
+/// refuses with `ENOTTY`. A disk node takes `DKIOCSYNCHRONIZECACHE`.
+pub fn flush(file: &File) -> std::io::Result<()> {
+    use std::os::unix::fs::FileTypeExt;
+    let kind = file.metadata()?.file_type();
+    if !(kind.is_char_device() || kind.is_block_device()) {
+        return file.sync_all();
+    }
+    // SAFETY: the descriptor is live for as long as `file` is, and the
+    // request takes no argument.
+    let answer = unsafe { libc::ioctl(file.as_raw_fd(), DKIOCSYNCHRONIZECACHE) };
+    if answer == -1 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
