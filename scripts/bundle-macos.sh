@@ -29,4 +29,10 @@ cp "$root/assets/icons/onyx.icns" "$app/Contents/Resources/onyx.icns"
 sed "s/@VERSION@/$version/g" "$root/packaging/macos/Info.plist" > "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 
+# Seal the bundle with an ad hoc signature. The linker signs each binary
+# alone, and macOS calls a bundle that nothing seals damaged. No paid
+# certificate signs it, so macOS still asks the person before the first start.
+codesign --force --deep --sign - "$app"
+codesign --verify --deep --strict "$app"
+
 echo "Built $app, version $version."
