@@ -173,6 +173,16 @@ def check_linux(image, fs, names):
         run(["losetup", "--detach", device])
 
 
+def hdiutil_detach(disk):
+    """Detach a disk image. macOS holds a volume busy for a moment after it
+    is unmounted, for Spotlight among others, so try again before force."""
+    for _ in range(10):
+        if subprocess.run(["hdiutil", "detach", "-quiet", disk]).returncode == 0:
+            return
+        time.sleep(1)
+    run(["hdiutil", "detach", "-force", "-quiet", disk])
+
+
 def check_macos(image, fs, names):
     attached = run(["hdiutil", "attach", "-imagekey", "diskimage-class=CRawDiskImage",
                     "-nomount", image])
@@ -200,7 +210,7 @@ def check_macos(image, fs, names):
         return kind == names[1], kind, label, back
     finally:
         os.rmdir(mount)
-        run(["hdiutil", "detach", "-quiet", disk])
+        hdiutil_detach(disk)
 
 
 # Check the partition of a mounted VHD that holds the data: the last one,

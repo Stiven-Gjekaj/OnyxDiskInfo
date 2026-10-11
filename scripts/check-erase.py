@@ -64,7 +64,7 @@ def attach(image):
                    "-nomount", image])
         disk = out.split()[0]
         target = drive_args(disk.removeprefix("/dev/"))
-        return target[0], target[1], lambda: run(["hdiutil", "detach", "-quiet", disk])
+        return target[0], target[1], lambda: check_format.hdiutil_detach(disk)
     vhd = check_format.as_vhd(image)
     number = check_format.mount_vhd(vhd)
     target = drive_args(str(number))
