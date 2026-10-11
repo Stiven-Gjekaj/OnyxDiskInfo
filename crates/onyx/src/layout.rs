@@ -220,10 +220,22 @@ fn host_macos(
     };
     let result = host_tool::macos_erase(fs, table, &disk, label).and_then(|c| run_tool(&c));
     if target.image.is_some() {
-        run_tool(&tool("hdiutil", &["detach", "-quiet", &disk]))?;
+        detach(&disk)?;
     }
     result?;
     Ok((drive, None))
+}
+
+/// Detach a disk image on macOS. macOS holds a new volume busy for a moment,
+/// for Spotlight among others, so try again before force.
+fn detach(disk: &str) -> Result<()> {
+    for _ in 0..10 {
+        if run_tool(&tool("hdiutil", &["detach", "-quiet", disk])).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    run_tool(&tool("hdiutil", &["detach", "-force", "-quiet", disk])).map(|_| ())
 }
 
 /// Windows: PowerShell clears the disk, makes the partition, and formats
