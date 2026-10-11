@@ -1,0 +1,17 @@
+[package]
+name = "onyx-store"
+description = "The history of each drive that Onyx reads, in SQLite."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+onyx-core.workspace = true
+# SQLite with its library built in, so that no host needs it installed.
+rusqlite.workspace = true
+
+[lints]
+workspace = true
