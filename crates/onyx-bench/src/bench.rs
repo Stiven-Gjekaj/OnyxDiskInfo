@@ -163,7 +163,10 @@ pub fn run(
                 }
                 let mut random = Random(seed ^ (worker as u64 + 1).wrapping_mul(0x9e37_79b9));
                 let (mut bytes, mut commands, mut busy) = (0u64, 0u64, 0u64);
-                while began.elapsed() < duration {
+                // Each worker sends one command at least. A thread that the
+                // host starts late would send none, and the job would give a
+                // speed of zero and no error.
+                loop {
                     let index = match job.pattern {
                         Pattern::Sequential => next_block.fetch_add(1, Ordering::Relaxed) % blocks,
                         Pattern::Random => random.next() % blocks,
@@ -184,6 +187,9 @@ pub fn run(
                     }
                     bytes += job.block;
                     commands += 1;
+                    if began.elapsed() >= duration {
+                        break;
+                    }
                 }
                 if let Ok(mut t) = totals.lock() {
                     t.0 += bytes;
@@ -347,5 +353,12 @@ mod tests {
         }
         let e = run(&Broken, JOBS[3], 0, MIB, SHORT, 1).unwrap_err();
         assert_eq!(e.to_string(), "gone");
+    }
+
+    #[test]
+    fn each_worker_sends_a_command_when_the_time_is_up_before_it_starts() {
+        let d = MemoryDevice::new(MIB as usize, 512);
+        let r = run(&d, JOBS[2], 0, MIB, Duration::ZERO, 1).unwrap();
+        assert_eq!(r.commands, JOBS[2].queue as u64);
     }
 }
