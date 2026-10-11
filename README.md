@@ -95,7 +95,7 @@ onyx list
 onyx health <number> [--json]
 onyx scan <number> [--json]
 onyx bench <number> [--json]
-onyx bench --file <path> [--size-mib 1024] [--json]
+onyx bench --file <path> [--size-mib 1024] [--keep] [--reuse] [--json]
 onyx test capacity <number> [--force] [--confirm "<model> <size>"]
 onyx test write <number> [--force] [--confirm "<model> <size>"]
 onyx format <number> --fs exfat [--table mbr|gpt] [--label NAME]
