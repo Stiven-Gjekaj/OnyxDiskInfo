@@ -159,6 +159,16 @@ jobs:
       - name: check what onyx format writes on Windows
         if: runner.os == 'Windows'
         run: python scripts/check-format.py target/debug/onyx.exe
+      # onyx erase on an image that the host attaches as a disk.
+      - name: erase a disk on Linux
+        if: runner.os == 'Linux'
+        run: sudo python3 scripts/check-erase.py target/debug/onyx
+      - name: erase a disk on macOS
+        if: runner.os == 'macOS'
+        run: python3 scripts/check-erase.py target/debug/onyx
+      - name: erase a disk on Windows
+        if: runner.os == 'Windows'
+        run: python scripts/check-erase.py target/debug/onyx.exe
 
       # A report and not a gate. The disk of a cloud runner changes its speed
       # from minute to minute: two runs of fio in one job differed by up to
