@@ -86,6 +86,30 @@ pub enum Command {
         #[arg(long, default_value = "ONYX")]
         label: String,
     },
+    /// Erase every byte of a drive: write over it, or TRIM it.
+    Erase {
+        #[command(flatten)]
+        target: WriteTarget,
+        /// What one pass writes. Give it once for each pass. The default is
+        /// one pass of zeros.
+        #[arg(long = "pass", value_enum, conflicts_with = "trim")]
+        passes: Vec<PassChoice>,
+        /// Tell a flash drive that no block holds data, in place of a pass.
+        /// It takes seconds. The drive decides when it erases the blocks.
+        #[arg(long)]
+        trim: bool,
+        /// Do not read the last pass back.
+        #[arg(long, conflicts_with = "trim")]
+        no_check: bool,
+    },
+}
+
+/// What one pass of `onyx erase` writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum PassChoice {
+    Zero,
+    Ones,
+    Random,
 }
 
 /// A file system that `onyx format` writes. Onyx writes the four FAT and
@@ -260,6 +284,21 @@ mod tests {
             ])
             .is_ok()
         );
+    }
+
+    #[test]
+    fn erase_takes_passes_or_a_trim_and_not_both() {
+        let cli = Cli::try_parse_from(["onyx", "erase", "2", "--pass", "random", "--pass", "zero"])
+            .unwrap();
+        let Command::Erase { passes, trim, .. } = cli.command else {
+            panic!("not erase");
+        };
+        assert_eq!(passes, [super::PassChoice::Random, super::PassChoice::Zero]);
+        assert!(!trim);
+        assert!(Cli::try_parse_from(["onyx", "erase", "2", "--trim"]).is_ok());
+        assert!(Cli::try_parse_from(["onyx", "erase", "2", "--trim", "--pass", "zero"]).is_err());
+        assert!(Cli::try_parse_from(["onyx", "erase", "2", "--trim", "--no-check"]).is_err());
+        assert!(Cli::try_parse_from(["onyx", "erase"]).is_err());
     }
 
     #[test]

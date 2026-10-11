@@ -28,7 +28,7 @@ fn find(number: usize) -> Result<DriveInfo> {
 }
 
 /// A device on a drive that is open.
-fn device(drive: &DriveInfo, file: &std::fs::File) -> Result<FileDevice> {
+pub(crate) fn device(drive: &DriveInfo, file: &std::fs::File) -> Result<FileDevice> {
     Ok(FileDevice::new(
         file.try_clone()?,
         drive.size_bytes,
@@ -46,20 +46,20 @@ pub(crate) fn run_mark() -> u64 {
 
 /// A line of progress on the error stream, at most twice a second, so that
 /// the output of the command stays clean for a script.
-struct Meter {
+pub(crate) struct Meter {
     last: Instant,
     shown: bool,
 }
 
 impl Meter {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Meter {
             last: Instant::now(),
             shown: false,
         }
     }
 
-    fn show(&mut self, what: &str, done: u64, total: u64, bad: u64) {
+    pub(crate) fn show(&mut self, what: &str, done: u64, total: u64, bad: u64) {
         if self.last.elapsed() < Duration::from_millis(500) && done < total {
             return;
         }
@@ -73,7 +73,7 @@ impl Meter {
         let _ = io::stderr().flush();
     }
 
-    fn done(&self) {
+    pub(crate) fn done(&self) {
         if self.shown {
             eprintln!();
         }

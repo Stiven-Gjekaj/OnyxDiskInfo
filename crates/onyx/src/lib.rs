@@ -7,6 +7,7 @@ use clap::Parser;
 
 pub mod cli;
 pub mod disk_tests;
+pub mod erase;
 pub mod format;
 pub mod health;
 pub mod json;
@@ -50,6 +51,18 @@ pub fn run() -> i32 {
             table,
             label,
         } => layout::run_format(&target, fs, table, &label),
+        Command::Erase {
+            target,
+            passes,
+            trim,
+            no_check,
+        } => {
+            if trim {
+                erase::run_trim(&target)
+            } else {
+                erase::run_overwrite(&target, &passes, !no_check)
+            }
+        }
     };
     match result {
         Ok(code) => code,
