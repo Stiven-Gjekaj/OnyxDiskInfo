@@ -19,7 +19,8 @@ P3 is done on Windows. A SATA drive in a USB case waits for Linux and
 macOS.
 P4 is done but for its benchmark half, which is partly proven.
 P5 is done. P6 is done but for the erase commands of the firmware, which
-wait for a drive to test them. P7 is next.
+wait for a drive to test them. P7 is done but for a look at the tray icon on
+a screen. P8 is next.
 
 ```mermaid
 flowchart LR
@@ -302,6 +303,36 @@ Work: SQLite history, trend charts, alerts when a value changes, and a tray
 icon.
 
 Exit test: a value that changes between two polls makes an alert.
+
+Result: done.
+`scripts/check-watch.py` polls the drives of the host twice with
+`onyx watch --once`. Between the two polls it lowers one count of damage of
+the last reading in the history, so the second, real reading counts more.
+CI runs it on each host, and each one gave the alert, the exit code 2, and
+the alert in `onyx alerts`:
+
+- Linux: the failed reads of the measured Hyper-V disk.
+- macOS: the failed reads of a measured disk image.
+- Windows: the media errors of the NVMe drive of the runner.
+
+A test of `onyx-store` makes the same change in memory, with the same
+result.
+
+The desktop app keeps each reading, charts the temperature of the drive, and
+shows its alerts. The GUI check of P5 still passes on each host.
+
+What the work found:
+
+- The macOS runner attaches disk images while a job runs: one GUI check saw
+  5 drives in `onyx list` and 15 in the app. The check now reads again when
+  the two differ.
+- SQLite is C, and the checks of the other targets in CI have no C
+  compiler for them. They now link a system SQLite, which a check never
+  links.
+
+Open: the tray icon. The app made it and ran with no error on a MacBook Air,
+but the screen was locked, so nobody saw the icon. A test with no display
+has no tray.
 
 ## P8: the release
 
