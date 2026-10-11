@@ -65,9 +65,9 @@ Options that lost:
 | Crate | Work |
 |---|---|
 | `onyx-core` | It decodes ATA SMART, the NVMe health log, SCSI log pages, and eMMC EXT_CSD. It scores health. It holds the drive model and the table of vendor and bridge quirks. It takes no dependency. |
-| `onyx-probe` | It lists drives and sends pass-through commands on each host. |
-| `onyx-bench` | It runs the surface scan, the write and verify test, the fake capacity test, and the benchmarks. |
-| `onyx-layout` | It writes GPT and MBR, FAT12, FAT16, FAT32, and exFAT. It erases a disk. It calls the host for the other file systems. |
+| `onyx-probe` | It lists drives and sends pass-through commands on each host. It sends the TRIM of an erase. |
+| `onyx-bench` | It runs the surface scan, the write and verify test, the fake capacity test, the benchmarks, and the overwrite passes of an erase. |
+| `onyx-layout` | It writes GPT and MBR, FAT12, FAT16, FAT32, and exFAT. It gives the command line of the host tool for the other file systems. |
 | `onyx-store` | It keeps the history in SQLite. |
 | `onyx` | The command line. |
 | `onyx-gui` | The desktop app. |
@@ -143,10 +143,33 @@ The result is the same on all three hosts.
 
 **Onyx calls the host for the other file systems.**
 These are NTFS, ext4, btrfs, XFS, APFS, and HFS+.
-The host tools are `mkfs.*` on Linux, `diskutil` and `newfs_*` on macOS, and
-`format` on Windows.
-A table in `onyx-layout` says which file system each host can write.
+A table in `onyx-layout` says which file system each host can write:
+
+| Host | Tool | File systems |
+|---|---|---|
+| Linux | Onyx writes the table, then `mkfs.*` writes the partition | NTFS, ext4, btrfs, XFS |
+| macOS | `diskutil eraseDisk` writes both | APFS, HFS+ |
+| Windows | `Clear-Disk`, `Initialize-Disk`, `New-Partition`, `Format-Volume` | NTFS |
+
+A host with no writer for a file system refuses it before the prompt, and
+names the hosts that have one.
 The app shows only the file systems that the host can write.
+
+On macOS and Windows, the host tool writes the table too. APFS needs the
+container that `diskutil` makes, and Windows puts its own reserved partition
+on a GPT. A table that Onyx writes first would only be written over.
+
+**MBR is the default table.** Each camera, car radio, and console reads MBR,
+and many read no GPT. `--table gpt` gives a GPT. APFS needs a GPT, and Onyx
+refuses APFS on an MBR.
+
+**FAT12 and FAT16 come from the `fatfs` crate, after a dry run.** `fatfs`
+takes the FAT type as a hint for the size of a cluster, and then writes the
+type that the count of clusters gives. A FAT12 of 1 GiB came out as FAT16.
+Onyx formats a disk that keeps only its first sector first, reads the type
+from it, and refuses a size that gives another type before it writes a byte.
+`fatfs` also leaves the count of hidden sectors at zero, and Windows refuses
+such a volume, so Onyx writes the start of the partition there.
 
 This is different from Burnout.
 Burnout never calls the host.
@@ -168,6 +191,24 @@ These are ATA Secure Erase, NVMe Format, and NVMe Sanitize.
 If the disk has none, Onyx uses a full TRIM or it writes passes over the
 disk.
 Each erase reads a sample back and shows the result.
+
+**The overwrite passes and the full TRIM come first. The commands of the
+firmware wait for a drive to test them.** Decided on 2026-10-11.
+An overwrite and a TRIM can be tested on a disk image that each host
+attaches, and CI does that. A firmware erase cannot: it goes to a real
+drive, it cannot be stopped, and a wrong command can lock a drive with a
+password or leave it unusable. The only NVMe drive at hand is the system
+disk, which Onyx refuses, and no SATA drive is at hand. So the firmware
+erases wait, as the SATA half of P2 does.
+
+- One pass of zeros is the default. It is the "clear" of NIST SP 800-88 for
+  a disk that a person cannot read past its own interface.
+- The last pass reads back unless `--no-check` is given.
+- A TRIM is not an erase that a person can prove. A drive may give back the
+  old bytes of a trimmed block until it erases the block. Onyx reads 64
+  blocks spread over the drive after the TRIM and prints how many hold only
+  zeros. The disk images of macOS and Windows take the TRIM and keep every
+  byte, and Onyx says so.
 
 ---
 
