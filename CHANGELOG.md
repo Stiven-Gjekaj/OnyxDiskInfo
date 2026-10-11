@@ -42,3 +42,17 @@ Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 - The desktop app asks for administrator rights when it starts on Windows.
   On macOS and on Linux, a drive that needs root gets a button that reads it
   through the password dialog of the system.
+- `onyx format` writes a GPT or an MBR with one partition. Onyx writes
+  FAT12, FAT16, FAT32, and exFAT itself, on each host. The tools of the host
+  write NTFS, ext4, btrfs, and XFS on Linux, APFS and HFS+ on macOS, and
+  NTFS on Windows.
+- `onyx erase` writes one pass or more over every byte of a drive and reads
+  the last pass back, or sends a TRIM of the whole drive and reads a sample.
+
+### Fixed
+
+- A flush on a drive on macOS failed, so the write test counted a bad block
+  and the capacity test stopped. Onyx now sends the request that a disk
+  node takes.
+- A benchmark job could give a speed of zero when the host started a worker
+  late.
