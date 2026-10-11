@@ -17,6 +17,7 @@ onyx-bench.workspace = true
 onyx-core.workspace = true
 onyx-layout.workspace = true
 onyx-probe.workspace = true
+onyx-store.workspace = true
 
 [lints]
 workspace = true

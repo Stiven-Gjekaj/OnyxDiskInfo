@@ -3320,6 +3320,7 @@ dependencies = [
  "onyx-core",
  "onyx-layout",
  "onyx-probe",
+ "onyx-store",
 ]
 
 [[package]]

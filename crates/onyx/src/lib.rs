@@ -10,6 +10,7 @@ pub mod disk_tests;
 pub mod erase;
 pub mod format;
 pub mod health;
+pub mod history;
 pub mod json;
 pub mod layout;
 pub mod list;
@@ -57,6 +58,17 @@ pub fn run() -> i32 {
             table,
             label,
         } => layout::run_format(&target, fs, table, &label),
+        Command::Watch {
+            once,
+            interval,
+            store,
+        } => history::run_watch(once, interval, &store),
+        Command::History {
+            drive,
+            limit,
+            store,
+        } => history::run_history(drive, limit, &store),
+        Command::Alerts { limit, store } => history::run_alerts(limit, &store),
         Command::Erase {
             target,
             passes,

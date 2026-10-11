@@ -91,6 +91,36 @@ pub enum Command {
         #[arg(long, default_value = "ONYX")]
         label: String,
     },
+    /// Read the health of every drive, keep it in the history, and say what
+    /// changed since the last reading. This writes nothing on a drive.
+    Watch {
+        /// Read each drive once, and stop.
+        #[arg(long)]
+        once: bool,
+        /// The seconds between two readings.
+        #[arg(long, default_value_t = 3600, conflicts_with = "once")]
+        interval: u64,
+        #[command(flatten)]
+        store: StoreArgs,
+    },
+    /// Show the history: each drive in it, or the readings of one drive.
+    History {
+        /// The number of a drive, as `onyx list` shows it.
+        drive: Option<usize>,
+        /// The most readings to show, the newest first.
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+        #[command(flatten)]
+        store: StoreArgs,
+    },
+    /// Show the alerts in the history, the newest first.
+    Alerts {
+        /// The most alerts to show.
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+        #[command(flatten)]
+        store: StoreArgs,
+    },
     /// Erase every byte of a drive: write over it, or TRIM it.
     Erase {
         #[command(flatten)]
@@ -107,6 +137,17 @@ pub enum Command {
         #[arg(long, conflicts_with = "trim")]
         no_check: bool,
     },
+}
+
+/// Where the history is, and how to print it.
+#[derive(Debug, clap::Args)]
+pub struct StoreArgs {
+    /// The history file. The default is in the data folder of this person.
+    #[arg(long)]
+    pub db: Option<PathBuf>,
+    /// Print JSON for a script, and not text for a person.
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// What one pass of `onyx erase` writes.
@@ -306,6 +347,28 @@ mod tests {
         assert!(Cli::try_parse_from(["onyx", "erase", "2", "--trim", "--pass", "zero"]).is_err());
         assert!(Cli::try_parse_from(["onyx", "erase", "2", "--trim", "--no-check"]).is_err());
         assert!(Cli::try_parse_from(["onyx", "erase"]).is_err());
+    }
+
+    #[test]
+    fn watch_runs_once_or_at_an_interval_and_not_both() {
+        let cli = Cli::try_parse_from(["onyx", "watch", "--once", "--db", "h.sqlite"]).unwrap();
+        let Command::Watch { once, store, .. } = cli.command else {
+            panic!("not watch");
+        };
+        assert!(once);
+        assert_eq!(store.db.as_deref(), Some(std::path::Path::new("h.sqlite")));
+        let cli = Cli::try_parse_from(["onyx", "watch"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Watch {
+                interval: 3600,
+                once: false,
+                ..
+            }
+        ));
+        assert!(Cli::try_parse_from(["onyx", "watch", "--once", "--interval", "5"]).is_err());
+        assert!(Cli::try_parse_from(["onyx", "history", "2", "--limit", "5"]).is_ok());
+        assert!(Cli::try_parse_from(["onyx", "alerts", "--json"]).is_ok());
     }
 
     #[test]
