@@ -19,6 +19,7 @@ pub mod open;
 pub mod sample;
 pub mod sat;
 pub mod smartctl;
+pub mod trim;
 pub mod windows;
 
 pub use health::{RawHealth, source_of};

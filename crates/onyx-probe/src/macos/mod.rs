@@ -8,3 +8,5 @@ pub mod open;
 pub mod parse;
 #[cfg(target_os = "macos")]
 pub mod smart;
+#[cfg(target_os = "macos")]
+pub mod trim;

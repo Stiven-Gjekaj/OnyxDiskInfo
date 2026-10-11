@@ -13,3 +13,5 @@ pub mod passthru;
 #[cfg(target_os = "linux")]
 pub mod smart;
 pub mod source;
+#[cfg(target_os = "linux")]
+pub mod trim;

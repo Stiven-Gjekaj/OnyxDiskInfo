@@ -9,4 +9,6 @@ pub mod passthru;
 pub mod raw;
 #[cfg(windows)]
 pub mod smart;
+#[cfg(windows)]
+pub mod trim;
 pub mod volumes;
