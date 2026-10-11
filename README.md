@@ -34,8 +34,8 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > `onyx list` shows each drive on Windows, on macOS, and on Linux.
 > `onyx health` reads an NVMe drive on all three hosts, and agrees with
 > smartctl. A drive that reports nothing gets a measured record with a low
-> confidence. The SATA and USB bridge paths are written and wait for a drive
-> to test them.
+> confidence. A SATA drive in a USB case reads through SAT on Windows, and
+> agrees with smartctl. The Linux and macOS paths for SATA wait for a test.
 > `onyx scan`, `onyx bench`, and `onyx test` work. The capacity test finds a
 > fake drive. The comparison of the benchmarks with fio is partly proven.
 > The desktop app shows the same values as `onyx health` on all three hosts.
