@@ -98,8 +98,8 @@ jobs:
           Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install-scoop.ps1
           ./install-scoop.ps1 -RunAsAdmin
           $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
-          scoop bucket add stiven https://github.com/Stiven-Gjekaj/scoop-bucket
-          scoop install stiven/onyxdiskinfo
+          scoop bucket add stiven-gjekaj https://github.com/Stiven-Gjekaj/scoop-bucket
+          scoop install stiven-gjekaj/onyxdiskinfo
           $got = onyx --version
           if ($got -ne "onyx $env:VERSION") { throw "onyx --version says $got" }
           onyx list
