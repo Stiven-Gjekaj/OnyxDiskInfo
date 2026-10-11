@@ -9,6 +9,33 @@ import { DriveTabButton, Badge, AttributeTable } from "widgets.slint";
 
 export { AppData, Logic, DriveTab, InfoRow, AttributeRow, Theme, ThemePreference, Verdict }
 
+// The icon in the tray, the notification area, or the menu bar. It keeps
+// the app reading the drives after the window closes.
+export component OnyxTray inherits SystemTrayIcon {
+    icon: @image-url("../../../assets/logo.svg");
+    in property <string> summary: "OnyxDiskInfo";
+    tooltip: root.summary;
+    callback show-window();
+    callback read-now();
+    callback quit();
+
+    Menu {
+        MenuItem {
+            title: "Show OnyxDiskInfo";
+            activated => { root.show-window(); }
+        }
+        MenuItem {
+            title: "Read the drives now";
+            activated => { root.read-now(); }
+        }
+        MenuSeparator { }
+        MenuItem {
+            title: "Quit";
+            activated => { root.quit(); }
+        }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "OnyxDiskInfo";
     icon: @image-url("../../../assets/logo.svg");

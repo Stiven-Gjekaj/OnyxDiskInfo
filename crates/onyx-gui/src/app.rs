@@ -11,12 +11,15 @@ use serde_json::Value;
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel, Weak};
 
 use crate::view::{self, DriveView};
-use crate::{AppData, AttributeRow, DriveTab, InfoRow, Logic, MainWindow};
+use crate::{AppData, AttributeRow, DriveTab, InfoRow, Logic, MainWindow, OnyxTray};
 
 thread_local! {
     /// The view of each drive, in the order of `onyx list`. Only the thread
     /// of the window touches it.
     static VIEWS: RefCell<Vec<DriveView>> = const { RefCell::new(Vec::new()) };
+
+    /// The icon in the tray, when the host has a tray.
+    static TRAY: RefCell<Option<OnyxTray>> = const { RefCell::new(None) };
 
     /// The tabs. The window keeps one model and its rows change in place, so
     /// a tab that a person or a screen reader holds stays the same tab while
@@ -183,13 +186,15 @@ fn load(weak: Weak<MainWindow>) {
         })
         .ok();
         let taken_at = onyx::history::now();
+        let mut new_alerts = 0;
         for (index, drive) in drives.iter().enumerate() {
             let record = onyx_probe::health_record(drive);
             let key = onyx::history::drive_of(drive);
             let (temperature, alerts) = match store.as_mut() {
                 Some(store) => {
                     if let Ok(record) = &record {
-                        let _ = store.add(&key, taken_at, &onyx_core::snapshot::snapshot(record));
+                        let snapshot = onyx_core::snapshot::snapshot(record);
+                        new_alerts += store.add(&key, taken_at, &snapshot).map_or(0, |a| a.len());
                     }
                     history_of(store, &key.key)
                 }
@@ -213,8 +218,47 @@ fn load(weak: Weak<MainWindow>) {
                 });
             });
         }
-        let _ = weak.upgrade_in_event_loop(|ui| ui.global::<AppData<'_>>().set_busy(false));
+        let _ = weak.upgrade_in_event_loop(move |ui| {
+            ui.global::<AppData<'_>>().set_busy(false);
+            let summary = VIEWS.with_borrow(|views| tray_summary(views, new_alerts));
+            TRAY.with_borrow(|tray| {
+                if let Some(tray) = tray {
+                    tray.set_summary(summary.into());
+                }
+            });
+        });
     });
+}
+
+/// The words of the tray: the worst verdict of the drives, and the alerts
+/// that the last reading gave.
+pub fn tray_summary(views: &[DriveView], new_alerts: usize) -> String {
+    let worst = views
+        .iter()
+        .map(|v| v.verdict)
+        .filter(|v| *v != view::Verdict::Unknown)
+        .max_by_key(|v| match v {
+            view::Verdict::Good => 0,
+            view::Verdict::Caution => 1,
+            view::Verdict::Bad => 2,
+            view::Verdict::Unknown => -1,
+        });
+    let drives = match views.len() {
+        1 => "1 drive".to_string(),
+        n => format!("{n} drives"),
+    };
+    let state = match worst {
+        Some(view::Verdict::Bad) => "one is Bad",
+        Some(view::Verdict::Caution) => "one needs caution",
+        Some(_) => "all Good",
+        None => "none read",
+    };
+    let alerts = match new_alerts {
+        0 => String::new(),
+        1 => ", 1 new alert".to_string(),
+        n => format!(", {n} new alerts"),
+    };
+    format!("OnyxDiskInfo: {drives}, {state}{alerts}")
 }
 
 /// Read the current drive with administrator rights, on a thread of its own.
@@ -241,7 +285,34 @@ fn read_with_rights(weak: Weak<MainWindow>) {
     });
 }
 
-/// Open the window, and run until the person closes it.
+/// How often the app reads the drives while it runs.
+const POLL: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// Make the icon in the tray, when the host has one. A test with no display
+/// has none, and `ONYX_NO_TRAY` turns it off.
+fn tray(ui: &MainWindow) -> Option<OnyxTray> {
+    let headless = std::env::var("SLINT_BACKEND").is_ok_and(|b| b == "headless");
+    if headless || std::env::var_os("ONYX_NO_TRAY").is_some() {
+        return None;
+    }
+    let tray = OnyxTray::new().ok()?;
+    let weak = ui.as_weak();
+    tray.on_show_window(move || {
+        if let Some(ui) = weak.upgrade() {
+            let _ = ui.show();
+        }
+    });
+    let weak = ui.as_weak();
+    tray.on_read_now(move || load(weak.clone()));
+    tray.on_quit(|| {
+        let _ = slint::quit_event_loop();
+    });
+    tray.show().ok()?;
+    Some(tray)
+}
+
+/// Open the window, and run until the person quits. With a tray, a closed
+/// window hides, and the app reads the drives each hour.
 pub fn run() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
     let logic = ui.global::<Logic<'_>>();
@@ -259,5 +330,47 @@ pub fn run() -> Result<(), slint::PlatformError> {
     logic.on_read_with_rights(move || read_with_rights(weak.clone()));
 
     load(ui.as_weak());
-    ui.run()
+    let Some(tray) = tray(&ui) else {
+        return ui.run();
+    };
+    TRAY.with_borrow_mut(|slot| *slot = Some(tray));
+    let poll = slint::Timer::default();
+    let weak = ui.as_weak();
+    poll.start(slint::TimerMode::Repeated, POLL, move || load(weak.clone()));
+    ui.window()
+        .on_close_requested(|| slint::CloseRequestResponse::HideWindow);
+    ui.show()?;
+    slint::run_event_loop_until_quit()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn drive(verdict: view::Verdict) -> DriveView {
+        let mut v = view::listed(&serde_json::json!({"number": 1, "name": "disk0"}));
+        v.verdict = verdict;
+        v
+    }
+
+    #[test]
+    fn the_tray_names_the_worst_drive_and_the_new_alerts() {
+        use view::Verdict::*;
+        assert_eq!(
+            tray_summary(&[drive(Good), drive(Good)], 0),
+            "OnyxDiskInfo: 2 drives, all Good"
+        );
+        assert_eq!(
+            tray_summary(&[drive(Good), drive(Caution)], 1),
+            "OnyxDiskInfo: 2 drives, one needs caution, 1 new alert"
+        );
+        assert_eq!(
+            tray_summary(&[drive(Bad), drive(Unknown)], 3),
+            "OnyxDiskInfo: 2 drives, one is Bad, 3 new alerts"
+        );
+        assert_eq!(
+            tray_summary(&[drive(Unknown)], 0),
+            "OnyxDiskInfo: 1 drive, none read"
+        );
+    }
 }
