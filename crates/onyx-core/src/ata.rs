@@ -388,10 +388,10 @@ pub fn attribute_name(id: u8) -> Option<&'static str> {
 pub(crate) mod tests {
     use super::*;
 
-    // No SATA drive was at hand when this module was written. Each block
-    // here is built to the layout in ACS, and the tests say which field they
-    // check. A dump captured from a real drive replaces them when one is at
-    // hand.
+    // Most blocks here are built to the layout in ACS, and the tests say
+    // which field they check. A built block reaches the cases that a healthy
+    // drive never shows, such as a failing attribute. The blocks of a real
+    // Kingston drive come last, and they prove the layout against smartctl.
 
     /// Put a string into IDENTIFY DEVICE words, high byte first.
     fn put_string(block: &mut [u8], first_word: usize, words: usize, text: &str) {
@@ -654,5 +654,152 @@ pub(crate) mod tests {
         assert_eq!(attribute_name(5), Some("Reallocated Sectors Count"));
         assert_eq!(attribute_name(194), Some("Temperature"));
         assert_eq!(attribute_name(6), None);
+    }
+
+    /// Parse a block that is written as lines of hexadecimal.
+    fn from_hex(lines: &[&str]) -> Vec<u8> {
+        let text: String = lines.concat();
+        (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    // A KINGSTON SA400S37240G, firmware S3Z40107, in a VIA VL715 USB case.
+    // Captured on 2026-10-11 with `smartctl -r ioctl,2 -i -A -d sat` on
+    // Windows 11, through the same SAT bridge that Onyx read.
+
+    /// IDENTIFY DEVICE. The serial number is replaced with
+    /// `SERIALMASKED0001`, which has the same length. The world wide name
+    /// in words 108 to 111 holds the serial number too, so it keeps the NAA
+    /// and the OUI of Kingston and the rest is zero. The checksum in byte 511
+    /// is made again for the new bytes.
+    fn kingston_identify() -> Vec<u8> {
+        from_hex(&[
+            "4000ff3f37c81000000000003f00000000000000455349524c41414d4b534445",
+            "30303130202020200000000000003353345a31303730494b474e54534e4f5320",
+            "3441303033533237303420472020202020202020202020202020202020200180",
+            "0040002f0040000000000700ff3f10003f0010fcfb000101ffffff0f00000700",
+            "03007800780078007800000d000000000000000000001f000e8506004c004400",
+            "f8071b016b7409746041697401b460417f40030003000000feff000000000000",
+            "0000000000000000b044f21b0000000000000800004000000250776b00000000",
+            "00000000000000000000000000001c401c400000000000000000000000000000",
+            "2100000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000100000000000000000000000000",
+            "2020202020202020202020202020202020202020202020202020202020202020",
+            "2020202020202020202020202020202020202020202020202020202000000000",
+            "00000040000000000000000000000000000001000000000000000000ff100000",
+            "0000000000000000000000000000000000000000200020000000000000000000",
+            "000000000000000000000000000000000000000000000000000000000000a5c2",
+        ])
+    }
+
+    /// SMART READ DATA, as the drive gave it.
+    fn kingston_smart_data() -> Vec<u8> {
+        from_hex(&[
+            "01000132006464640000000000000932006464170000000000000c320064641c",
+            "000000000000940000646400000000000000950000646400000000000000a700",
+            "00646400000000000000a81200646400000000000000a9000064640000000000",
+            "0000aa0000646400000000000000ac3200646400000000000000ad0000646400",
+            "000000000000b53200646400000000000000b60000646400000000000000bb32",
+            "00646400000000000000c0120064640f000000000000c222002e4e2e004e001f",
+            "0000c43200646400000000000000c73200646400000000000000da3200646400",
+            "000000000000e70000646464000000000000e9320064644c020000000000f132",
+            "006464f9010000000000f232006464db010000000000f4000064640800000000",
+            "0000f5000064640d000000000000f600006464f50f0000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000007800001102000100020a00000000000000000000",
+            "00005231323138413020303000000000534d4932323538585400000000000000",
+            "0000000000000000000000000000380200000042313630300000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "fffff50f000008000d0004000000000000000000000000000000000000000037",
+        ])
+    }
+
+    /// SMART READ THRESHOLDS, as the drive gave it.
+    fn kingston_thresholds() -> Vec<u8> {
+        from_hex(&[
+            "01000100000000000000000000000900000000000000000000000c0000000000",
+            "000000000000940000000000000000000000950000000000000000000000a700",
+            "00000000000000000000a80000000000000000000000a9000000000000000000",
+            "0000aa0a00000000000000000000ac0000000000000000000000ad0000000000",
+            "000000000000b50000000000000000000000b60000000000000000000000bb00",
+            "00000000000000000000c00000000000000000000000c2000000000000000000",
+            "0000c40000000000000000000000c70000000000000000000000da0000000000",
+            "000000000000e70000000000000000000000e90000000000000000000000f100",
+            "00000000000000000000f20000000000000000000000f4000000000000000000",
+            "0000f50000000000000000000000f60000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "000000000000000000000000000000000000000000000000000000000000001c",
+        ])
+    }
+
+    #[test]
+    fn the_identify_data_of_a_real_sata_drive_gives_what_smartctl_gave() {
+        let id = identity(&kingston_identify()).unwrap();
+        assert_eq!(id.model.as_deref(), Some("KINGSTON SA400S37240G"));
+        assert_eq!(id.serial.as_deref(), Some("SERIALMASKED0001"));
+        assert_eq!(id.firmware.as_deref(), Some("S3Z40107"));
+        // smartctl: "User Capacity: 240,057,409,536 bytes", "Sector Size:
+        // 512 bytes logical/physical", "Rotation Rate: Solid State Device".
+        assert_eq!(id.size_bytes(), 240_057_409_536);
+        assert_eq!(id.logical_sector_size, 512);
+        assert_eq!(id.rotation_rate, Some(0));
+        assert!(id.smart_supported && id.smart_enabled);
+        assert!(!id.bad_checksum);
+    }
+
+    #[test]
+    fn the_smart_data_of_a_real_sata_drive_gives_what_smartctl_gave() {
+        let s = smart(&kingston_smart_data(), Some(&kingston_thresholds())).unwrap();
+        assert!(!s.bad_checksum);
+        // Each row of `smartctl -A`: the id, the value, the worst, the
+        // threshold, and the raw value.
+        let table: [(u8, u8, u8, u8, u64); 26] = [
+            (1, 100, 100, 0, 100),
+            (9, 100, 100, 0, 23),
+            (12, 100, 100, 0, 28),
+            (148, 100, 100, 0, 0),
+            (149, 100, 100, 0, 0),
+            (167, 100, 100, 0, 0),
+            (168, 100, 100, 0, 0),
+            (169, 100, 100, 0, 0),
+            (170, 100, 100, 10, 0),
+            (172, 100, 100, 0, 0),
+            (173, 100, 100, 0, 0),
+            (181, 100, 100, 0, 0),
+            (182, 100, 100, 0, 0),
+            (187, 100, 100, 0, 0),
+            (192, 100, 100, 0, 15),
+            (194, 46, 78, 0, 133_149_098_030),
+            (196, 100, 100, 0, 0),
+            (199, 100, 100, 0, 0),
+            (218, 100, 100, 0, 0),
+            (231, 100, 100, 0, 100),
+            (233, 100, 100, 0, 588),
+            (241, 100, 100, 0, 505),
+            (242, 100, 100, 0, 475),
+            (244, 100, 100, 0, 8),
+            (245, 100, 100, 0, 13),
+            (246, 100, 100, 0, 4085),
+        ];
+        assert_eq!(s.attributes.len(), table.len());
+        for (a, (id, current, worst, threshold, raw)) in s.attributes.iter().zip(table) {
+            assert_eq!(
+                (a.id, a.current, a.worst, a.threshold, a.raw48()),
+                (id, current, worst, Some(threshold), raw),
+                "attribute {id}"
+            );
+            assert!(!a.failing_now() && !a.failed_in_past(), "attribute {id}");
+        }
+        // "46 (Min/Max 31/78)": the reading is the lowest byte.
+        assert_eq!(s.temperature_celsius(), Some(46));
+        assert_eq!(s.attribute(POWER_ON_HOURS).map(Attribute::value), Some(23));
+        assert_eq!(s.attribute(POWER_CYCLES).map(Attribute::value), Some(28));
     }
 }
