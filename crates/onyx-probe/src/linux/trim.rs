@@ -6,7 +6,7 @@ use std::fs::File;
 use std::os::fd::AsRawFd;
 
 /// `BLKDISCARD`: `_IO(0x12, 119)`.
-const BLKDISCARD: libc::c_ulong = 0x1277;
+const BLKDISCARD: libc::Ioctl = 0x1277;
 
 /// Discard `length` bytes from `offset`.
 pub fn discard(file: &File, offset: u64, length: u64) -> std::io::Result<()> {
