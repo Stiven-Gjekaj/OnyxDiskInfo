@@ -40,8 +40,10 @@ workspace = true
 # workflow with `cargo deb --no-build --target`. Both programs go into
 # /usr/bin, because the button that reads a drive as administrator runs
 # `onyx` from the folder of the app. dpkg-shlibdeps finds the libraries that
-# the app links. The window system and OpenGL are loaded at run time, so they
-# are recommended and not required.
+# the app links. The window system loads the libraries of X11 at run time,
+# and the app stops at the start without them, so the package names them.
+# OpenGL and Wayland are recommended: Slint draws without OpenGL, and the
+# window system uses X11 when there is no Wayland.
 [package.metadata.deb]
 name = "onyxdiskinfo"
 maintainer = "Stiven Gjekaj <stivenagostingjekaj@gmail.com>"
@@ -54,8 +56,8 @@ keeps a history of each drive, and gives an alert when a drive gets worse. \
 The package holds the app, OnyxDiskInfo, and the command line, onyx."""
 section = "admin"
 priority = "optional"
-depends = "$auto"
-recommends = "libegl1, libgl1, libwayland-client0, libx11-xcb1, libxcursor1, libxi6, libxrandr2"
+depends = "$auto, libxkbcommon-x11-0, libx11-6, libx11-xcb1, libxcursor1, libxi6, libxrandr2"
+recommends = "libegl1, libgl1, libwayland-client0"
 assets = [
     ["target/release/OnyxDiskInfo", "usr/bin/", "755"],
     ["target/release/onyx", "usr/bin/", "755"],
@@ -80,10 +82,14 @@ assets = [
     { source = "../../README.md", dest = "/usr/share/doc/onyxdiskinfo/README.md", mode = "644", doc = true },
 ]
 
-[package.metadata.generate-rpm.recommends]
-mesa-libEGL = "*"
-libwayland-client = "*"
+[package.metadata.generate-rpm.requires]
+libxkbcommon-x11 = "*"
+libX11 = "*"
 libX11-xcb = "*"
 libXcursor = "*"
 libXi = "*"
 libXrandr = "*"
+
+[package.metadata.generate-rpm.recommends]
+mesa-libEGL = "*"
+libwayland-client = "*"
