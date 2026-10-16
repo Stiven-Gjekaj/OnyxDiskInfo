@@ -149,6 +149,14 @@ winget, on Windows, after Microsoft accepts the package:
 winget install Stiven-Gjekaj.OnyxDiskInfo
 ```
 
+A package, on Linux. It installs the command line and the app, and needs
+Ubuntu 22.04, Debian 12, Fedora 36, or a later one:
+
+```bash
+sudo apt install ./onyxdiskinfo_<version>-1_amd64.deb
+sudo dnf install ./onyxdiskinfo-<version>-1.x86_64.rpm
+```
+
 Or download a file from the
 [releases](https://github.com/Stiven-Gjekaj/OnyxDiskInfo/releases).
 [docs/releasing.md](docs/releasing.md) says what each file is, and how to
