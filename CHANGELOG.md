@@ -6,7 +6,7 @@
 
 Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 
-## Unreleased
+## 0.2.0 - 2026-10-16
 
 ### Added
 
