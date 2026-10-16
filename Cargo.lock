@@ -3313,7 +3313,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "onyx"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "onyx-bench",
@@ -3325,18 +3325,18 @@ dependencies = [
 
 [[package]]
 name = "onyx-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "onyx-core",
 ]
 
 [[package]]
 name = "onyx-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "onyx-gui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "onyx",
  "onyx-core",
@@ -3350,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "onyx-layout"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "burnout-core",
  "burnout-layout",
@@ -3360,7 +3360,7 @@ dependencies = [
 
 [[package]]
 name = "onyx-probe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "core-foundation 0.10.1",
  "core-foundation-sys",
@@ -3373,7 +3373,7 @@ dependencies = [
 
 [[package]]
 name = "onyx-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "onyx-core",
  "rusqlite",
