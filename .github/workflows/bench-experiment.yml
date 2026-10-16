@@ -1,0 +1,37 @@
+# A one-off experiment: why Onyx writes 4K at random faster than fio on the
+# disk of a Linux runner. This branch is deleted after the run.
+name: bench-experiment
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.97.1
+      - run: sudo apt-get update && sudo apt-get install -y fio
+      - run: cargo build --release --locked -p onyx
+      - name: run fio four ways around onyx
+        run: |
+          set -eu
+          f="$RUNNER_TEMP/onyx-bench.tmp"
+          target/release/onyx bench --file "$f" --keep --seconds 1 --json > /dev/null
+          job() {
+            fio --name=x --filename="$f" --size=1g --rw=randwrite --bs=4k --numjobs=1 \
+              --ioengine=libaio --iodepth=1 --direct=1 --runtime=5 --time_based \
+              --output-format=json "$@" | jq '.jobs[0].write.bw_bytes / 1e6 | floor'
+          }
+          onyx() {
+            target/release/onyx bench --file "$f" --reuse --keep --seconds 5 --json \
+              | jq '.jobs[] | select(.job == "RND4K Q1T1" and .write) | .bytes_per_second / 1e6 | floor'
+          }
+          for round in 1 2 3; do
+            echo "round $round: fio default $(job)"
+            echo "round $round: fio scramble_buffers=0 $(job --scramble_buffers=0)"
+            echo "round $round: fio norandommap $(job --norandommap)"
+            echo "round $round: fio both $(job --scramble_buffers=0 --norandommap)"
+            echo "round $round: onyx $(onyx)"
+          done
