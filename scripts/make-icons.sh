@@ -1,8 +1,8 @@
 #!/bin/sh
 # Make the icon files of the app from assets/logo.svg: an .icns file for the
-# macOS bundle and an .ico file for the Windows program.
+# macOS bundle, an .ico file for the Windows program, and a PNG for Linux.
 #
-# Run it after a change to the logo, then commit the two files. The build
+# Run it after a change to the logo, then commit the three files. The build
 # does not run it, so a person who builds Onyx needs none of these tools.
 #
 # It needs rsvg-convert and python3, and iconutil, which only macOS has.
@@ -46,4 +46,7 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$set_dir" -o "$out/onyx.icns"
 
-echo "Wrote $out/onyx.icns and $out/onyx.ico."
+# Linux: one PNG of 256 pixels, which the desktop entry of the packages names.
+cp "$work/256.png" "$out/onyx-256.png"
+
+echo "Wrote $out/onyx.icns, $out/onyx.ico and $out/onyx-256.png."
