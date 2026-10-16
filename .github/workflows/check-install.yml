@@ -1,6 +1,6 @@
 # The exit test of P8: each package manager installs the release on a clean
-# host, and the files of the release carry the attestation of this
-# repository.
+# host, the Linux packages install on a clean system, and the files of the
+# release carry the attestation of this repository.
 #
 # Start it by hand after a release is published and its manifests are in the
 # tap, the bucket, and winget-pkgs. It installs the way a person does, from
@@ -82,6 +82,43 @@ jobs:
             lipo "$app/Contents/MacOS/$name" -verify_arch arm64 x86_64
           done
           echo "OnyxDiskInfo.app ${VERSION} is in /Applications, sealed, for both chips"
+
+  linux-packages:
+    name: the Linux packages of the release
+    runs-on: ubuntu-latest
+    steps:
+      # The packages from the release, in containers that hold nothing else,
+      # as on a new system. The app must start and keep running on a virtual
+      # display. timeout stops it after ten seconds and gives 124.
+      - name: install the .deb in Debian and the .rpm in Fedora
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gh release download "v${VERSION}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern 'onyxdiskinfo_*_amd64.deb' --pattern 'onyxdiskinfo-*.x86_64.rpm' --dir pkg
+          cat > pkg/start.sh <<'SH'
+          set -u
+          export ONYX_NO_TRAY=1
+          onyx --version | grep -qx "onyx $VERSION"
+          xvfb-run -a timeout 10 OnyxDiskInfo
+          code=$?
+          if [ "$code" != 124 ]; then
+            echo "OnyxDiskInfo stopped with code $code before ten seconds" >&2
+            exit 1
+          fi
+          echo "onyx $VERSION and OnyxDiskInfo run in $(. /etc/os-release; echo "$PRETTY_NAME")"
+          SH
+          docker run --rm -e VERSION -v "$PWD/pkg:/pkg" -w /pkg debian:12-slim sh -c '
+            apt-get update -qq &&
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+              ./onyxdiskinfo_*_amd64.deb xvfb xauth > /dev/null &&
+            sh start.sh'
+          docker run --rm -e VERSION -v "$PWD/pkg:/pkg" -w /pkg fedora:41 sh -c '
+            dnf install -y -q --setopt=install_weak_deps=False \
+              ./onyxdiskinfo-*.x86_64.rpm xorg-x11-server-Xvfb xorg-x11-xauth which > /dev/null &&
+            sh start.sh'
 
   windows:
     name: Scoop and winget
