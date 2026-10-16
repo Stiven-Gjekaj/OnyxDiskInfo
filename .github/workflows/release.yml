@@ -15,6 +15,8 @@
 #   silicon and Intel, with `onyx` inside it.
 # - OnyxDiskInfo-<version>-<target>.zip: OnyxDiskInfo.exe and onyx.exe, for
 #   Windows on x86_64 and on arm64. Scoop and winget install this file.
+# - onyxdiskinfo_<version>-1_<arch>.deb and onyxdiskinfo-<version>-1.<arch>.rpm:
+#   the app and the command line for Linux, on x86_64 and on arm64.
 # - SHA256SUMS.
 #
 # Every action is pinned to the commit of a release, for the reason that
@@ -162,9 +164,88 @@ jobs:
           path: out/OnyxDiskInfo-${{ matrix.target }}.zip
           if-no-files-found: error
 
+  app-linux:
+    name: the Linux packages for ${{ matrix.target }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # The app links glibc, so the oldest Ubuntu that GitHub runs gives
+          # the oldest glibc, and the packages install on more systems.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            deb: amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+            deb: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.97.1
+          targets: ${{ matrix.target }}
+
+      # Slint draws its text through fontconfig and reads the keyboard
+      # through xkbcommon. xvfb gives the check below a display.
+      - name: install the libraries of Slint and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig-dev libxkbcommon-dev xvfb
+
+      # Each tool version is exact, as each dependency of Onyx is.
+      - name: install the package tools
+        run: cargo install --locked cargo-deb@3.8.0 cargo-generate-rpm@0.21.0
+
+      - name: build
+        run: cargo build --release --locked -p onyx -p onyx-gui --target ${{ matrix.target }}
+
+      - name: package
+        run: |
+          mkdir out
+          cargo deb -p onyx-gui --no-build --target ${{ matrix.target }} --output out/
+          cargo generate-rpm -p crates/onyx-gui --target ${{ matrix.target }} --output out/
+          ls -l out
+
+      # A package that its own tool refuses is no package. apt installs the
+      # Debian package with each library that it names, and the app must
+      # start and keep running on a display. timeout stops it after ten
+      # seconds and gives 124, so 124 means that it ran.
+      - name: install the Debian package and start the app
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y ./out/onyxdiskinfo_*_${{ matrix.deb }}.deb
+          onyx --version
+          set +e
+          ONYX_NO_TRAY=1 xvfb-run -a timeout 10 OnyxDiskInfo
+          code=$?
+          set -e
+          if [ "$code" != 124 ]; then
+            echo "OnyxDiskInfo stopped with code $code before ten seconds" >&2
+            exit 1
+          fi
+          echo "OnyxDiskInfo ran for ten seconds on a virtual display"
+          test -f /usr/share/applications/onyxdiskinfo.desktop
+          sudo apt-get remove -y onyxdiskinfo
+
+      - name: read the RPM package
+        run: |
+          sudo apt-get install -y rpm > /dev/null
+          rpm -qip out/onyxdiskinfo-*.rpm
+          rpm -qlp out/onyxdiskinfo-*.rpm | grep -qx /usr/bin/OnyxDiskInfo
+          rpm -qlp out/onyxdiskinfo-*.rpm | grep -qx /usr/bin/onyx
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: app-${{ matrix.target }}
+          path: |
+            out/*.deb
+            out/*.rpm
+          if-no-files-found: error
+
   checksums:
     name: name the files and hash them
-    needs: [cli, app-macos, app-windows]
+    needs: [cli, app-macos, app-windows, app-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -193,13 +274,15 @@ jobs:
             case "$name" in
               onyx-*) cp "$file" "dist/onyx-${version}-${name#onyx-}" ;;
               OnyxDiskInfo-*) cp "$file" "dist/OnyxDiskInfo-${version}-${name#OnyxDiskInfo-}" ;;
+              # The package tools name a package with its version already.
+              onyxdiskinfo[_-]"${version}"-*) cp "$file" "dist/$name" ;;
               *) echo "an unknown file: $name" >&2; exit 1 ;;
             esac
           done
           cd dist
-          sha256sum onyx-* OnyxDiskInfo-* > SHA256SUMS
+          sha256sum onyx-* OnyxDiskInfo-* onyxdiskinfo* > SHA256SUMS
           cat SHA256SUMS
-          test "$(wc -l < SHA256SUMS)" = 9
+          test "$(wc -l < SHA256SUMS)" = 13
           echo "${version}" > ../VERSION
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -254,6 +337,7 @@ jobs:
           subject-path: |
             dist/onyx-*
             dist/OnyxDiskInfo-*
+            dist/onyxdiskinfo*
 
       # A draft, so that a person reads the assets before anybody else can
       # download them. This tool formats and erases drives.
