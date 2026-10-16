@@ -6,6 +6,13 @@
 
 Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### Added
+
+- A Debian package and an RPM package of the app and the command line, for
+  x86_64 and arm64.
+
 ## 0.1.0 - 2026-10-11
 
 The first release.
