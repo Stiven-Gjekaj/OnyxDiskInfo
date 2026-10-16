@@ -6,6 +6,10 @@ permissions:
   contents: read
 jobs:
   experiment:
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,6 +32,7 @@ jobs:
             target/release/onyx bench --file "$f" --reuse --keep --seconds 5 --json \
               | jq -r '.jobs[] | select(.job == "RND4K Q1T1") | (if .write then "write " else "read " end) + (.bytes_per_second / 1e6 | floor | tostring)' | tr '\n' ' '
           }
+          echo "runner: $(nproc) CPUs, $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2), disk $(df --output=source "$RUNNER_TEMP" | tail -1) $(lsblk -dno MODEL,ROTA,SIZE "$(df --output=source "$RUNNER_TEMP" | tail -1 | sed 's/[0-9]*$//; s/p$//')" 2>/dev/null)"
           for round in 1 2 3; do
             for engine in libaio psync io_uring; do
               echo "round $round: fio $engine write $(job randwrite $engine write) read $(job randread $engine read)"
