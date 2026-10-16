@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sample: [1, 2, 3, 4]
+        sample: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,13 +33,7 @@ jobs:
               | jq -r '.jobs[] | select(.job == "RND4K Q1T1") | (if .write then "write " else "read " end) + (.bytes_per_second / 1e6 | floor | tostring)' | tr '\n' ' '
           }
           echo "runner: $(nproc) CPUs, $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2), disk $(df --output=source "$RUNNER_TEMP" | tail -1) $(lsblk -dno MODEL,ROTA,SIZE "$(df --output=source "$RUNNER_TEMP" | tail -1 | sed 's/[0-9]*$//; s/p$//')" 2>/dev/null)"
-          heavy() { fio --name=w --filename="$f" --size=1g --rw=randwrite --bs=4k --ioengine=libaio \
-            --iodepth=32 --direct=1 --runtime=5 --time_based --end_fsync=1 > /dev/null; }
           for round in 1 2 3; do
-            heavy
-            echo "round $round: psync read right after a heavy write $(job randread psync read)"
-            heavy
-            sleep 5
-            echo "round $round: psync read 5 s after a heavy write $(job randread psync read)"
+            echo "round $round: fio psync write $(job randwrite psync write) read $(job randread psync read) libaio read $(job randread libaio read)"
             echo "round $round: onyx $(onyx)"
           done
