@@ -104,6 +104,11 @@ pub fn run_scan(number: usize, json: bool) -> Result<i32> {
 
 /// Run each job of CrystalDiskMark, for reading and, when `write` is true,
 /// for writing.
+///
+/// Each read job runs first, then each write job, in the order of
+/// CrystalDiskMark. A read that follows a heavy write can find the drive
+/// still busy with that write: on one cloud runner, a random read of 4 KiB
+/// after the write of 32 queues ran 25 percent slower than fio.
 fn run_jobs(
     device: &dyn Device,
     span: u64,
@@ -116,7 +121,9 @@ fn run_jobs(
     for job in JOBS {
         eprintln!("{}: reading", job.name);
         reads.push(bench::run(device, job, 0, span, duration, run_mark())?);
-        if write {
+    }
+    if write {
+        for job in JOBS {
             eprintln!("{}: writing", job.name);
             writes.push(bench::run(
                 device,
@@ -360,6 +367,48 @@ pub fn run_write(target: &WriteTarget) -> Result<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_read_job_runs_before_the_first_write_job() {
+        use std::sync::Mutex;
+        // A device in memory that remembers whether it took a write yet, and
+        // whether a read came after one.
+        struct Recording {
+            inner: onyx_bench::MemoryDevice,
+            wrote: Mutex<bool>,
+            read_after_write: Mutex<bool>,
+        }
+        impl Device for Recording {
+            fn size(&self) -> u64 {
+                self.inner.size()
+            }
+            fn sector_size(&self) -> u32 {
+                512
+            }
+            fn read_at(&self, b: &mut [u8], o: u64) -> std::io::Result<()> {
+                if *self.wrote.lock().unwrap() {
+                    *self.read_after_write.lock().unwrap() = true;
+                }
+                self.inner.read_at(b, o)
+            }
+            fn write_at(&self, b: &[u8], o: u64) -> std::io::Result<()> {
+                *self.wrote.lock().unwrap() = true;
+                self.inner.write_at(b, o)
+            }
+            fn flush(&self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let d = Recording {
+            inner: onyx_bench::MemoryDevice::new(4 * 1024 * 1024, 512),
+            wrote: Mutex::new(false),
+            read_after_write: Mutex::new(false),
+        };
+        let (reads, writes) = run_jobs(&d, 4 * 1024 * 1024, 0, true).unwrap();
+        assert_eq!((reads.len(), writes.len()), (4, 4));
+        assert!(*d.wrote.lock().unwrap());
+        assert!(!*d.read_after_write.lock().unwrap());
+    }
 
     #[test]
     fn a_test_file_is_new_or_one_to_reuse_of_the_same_size() {
