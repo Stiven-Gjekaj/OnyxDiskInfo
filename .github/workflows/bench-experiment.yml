@@ -20,18 +20,17 @@ jobs:
           f="$RUNNER_TEMP/onyx-bench.tmp"
           target/release/onyx bench --file "$f" --keep --seconds 1 --json > /dev/null
           job() {
-            fio --name=x --filename="$f" --size=1g --rw=randwrite --bs=4k --numjobs=1 \
-              --ioengine=libaio --iodepth=1 --direct=1 --runtime=5 --time_based \
-              --output-format=json "$@" | jq '.jobs[0].write.bw_bytes / 1e6 | floor'
+            fio --name=x --filename="$f" --size=1g --rw="$1" --bs=4k --numjobs=1 \
+              --ioengine="$2" --iodepth=1 --direct=1 --runtime=5 --time_based \
+              --output-format=json | jq ".jobs[0].${3}.bw_bytes / 1e6 | floor"
           }
           onyx() {
             target/release/onyx bench --file "$f" --reuse --keep --seconds 5 --json \
-              | jq '.jobs[] | select(.job == "RND4K Q1T1" and .write) | .bytes_per_second / 1e6 | floor'
+              | jq -r '.jobs[] | select(.job == "RND4K Q1T1") | (if .write then "write " else "read " end) + (.bytes_per_second / 1e6 | floor | tostring)' | tr '\n' ' '
           }
           for round in 1 2 3; do
-            echo "round $round: fio default $(job)"
-            echo "round $round: fio scramble_buffers=0 $(job --scramble_buffers=0)"
-            echo "round $round: fio norandommap $(job --norandommap)"
-            echo "round $round: fio both $(job --scramble_buffers=0 --norandommap)"
+            for engine in libaio psync io_uring; do
+              echo "round $round: fio $engine write $(job randwrite $engine write) read $(job randread $engine read)"
+            done
             echo "round $round: onyx $(onyx)"
           done
