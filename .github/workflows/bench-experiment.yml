@@ -1,5 +1,5 @@
-# A one-off experiment: why Onyx writes 4K at random faster than fio on the
-# disk of a Linux runner. This branch is deleted after the run.
+# A one-off experiment: the benchmark check on six runners. This branch is
+# deleted after the run.
 name: bench-experiment
 on: pull_request
 permissions:
@@ -18,22 +18,6 @@ jobs:
           toolchain: 1.97.1
       - run: sudo apt-get update && sudo apt-get install -y fio
       - run: cargo build --release --locked -p onyx
-      - name: run fio four ways around onyx
-        run: |
-          set -eu
-          f="$RUNNER_TEMP/onyx-bench.tmp"
-          target/release/onyx bench --file "$f" --keep --seconds 1 --json > /dev/null
-          job() {
-            fio --name=x --filename="$f" --size=1g --rw="$1" --bs=4k --numjobs=1 \
-              --ioengine="$2" --iodepth=1 --direct=1 --runtime=5 --time_based \
-              --output-format=json | jq ".jobs[0].${3}.bw_bytes / 1e6 | floor"
-          }
-          onyx() {
-            target/release/onyx bench --file "$f" --reuse --keep --seconds 5 --json \
-              | jq -r '.jobs[] | select(.job == "RND4K Q1T1") | (if .write then "write " else "read " end) + (.bytes_per_second / 1e6 | floor | tostring)' | tr '\n' ' '
-          }
-          echo "runner: $(nproc) CPUs, $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2), disk $(df --output=source "$RUNNER_TEMP" | tail -1) $(lsblk -dno MODEL,ROTA,SIZE "$(df --output=source "$RUNNER_TEMP" | tail -1 | sed 's/[0-9]*$//; s/p$//')" 2>/dev/null)"
-          for round in 1 2 3; do
-            echo "round $round: fio psync write $(job randwrite psync write) read $(job randread psync read) libaio read $(job randread libaio read)"
-            echo "round $round: onyx $(onyx)"
-          done
+      - run: |
+          echo "runner $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)"
+      - run: python3 scripts/check-bench.py target/release/onyx "$RUNNER_TEMP"
