@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=OnyxDiskInfo
+GenericName=Disk Health
+Comment=Read the health of every disk, and test, format and erase it
+Exec=OnyxDiskInfo
+Icon=onyxdiskinfo
+Terminal=false
+Categories=System;Monitor;
+Keywords=disk;drive;smart;nvme;health;ssd;
+StartupWMClass=OnyxDiskInfo

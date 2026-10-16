@@ -35,3 +35,55 @@ winresource.workspace = true
 
 [lints]
 workspace = true
+
+# The Debian package of the app and the command line, made by the release
+# workflow with `cargo deb --no-build --target`. Both programs go into
+# /usr/bin, because the button that reads a drive as administrator runs
+# `onyx` from the folder of the app. dpkg-shlibdeps finds the libraries that
+# the app links. The window system and OpenGL are loaded at run time, so they
+# are recommended and not required.
+[package.metadata.deb]
+name = "onyxdiskinfo"
+maintainer = "Stiven Gjekaj <stivenagostingjekaj@gmail.com>"
+copyright = "2026, Stiven Gjekaj"
+license-file = ["../../LICENSE", "0"]
+extended-description = """\
+OnyxDiskInfo reads the SMART and NVMe health of each drive, and measures a \
+drive that reports nothing. It scans, benchmarks, formats and erases drives, \
+keeps a history of each drive, and gives an alert when a drive gets worse. \
+The package holds the app, OnyxDiskInfo, and the command line, onyx."""
+section = "admin"
+priority = "optional"
+depends = "$auto"
+recommends = "libegl1, libgl1, libwayland-client0, libx11-xcb1, libxcursor1, libxi6, libxrandr2"
+assets = [
+    ["target/release/OnyxDiskInfo", "usr/bin/", "755"],
+    ["target/release/onyx", "usr/bin/", "755"],
+    ["../../packaging/linux/onyxdiskinfo.desktop", "usr/share/applications/", "644"],
+    ["../../assets/icons/onyx-256.png", "usr/share/icons/hicolor/256x256/apps/onyxdiskinfo.png", "644"],
+    ["../../assets/logo.svg", "usr/share/icons/hicolor/scalable/apps/onyxdiskinfo.svg", "644"],
+    ["../../README.md", "usr/share/doc/onyxdiskinfo/README.md", "644"],
+]
+
+# The RPM package, from the same two programs, with
+# `cargo generate-rpm --target`. rpm finds the libraries that the app links.
+[package.metadata.generate-rpm]
+name = "onyxdiskinfo"
+summary = "Reads the health of every disk, and tests, formats and erases it"
+assets = [
+    { source = "target/release/OnyxDiskInfo", dest = "/usr/bin/OnyxDiskInfo", mode = "755" },
+    { source = "target/release/onyx", dest = "/usr/bin/onyx", mode = "755" },
+    { source = "../../packaging/linux/onyxdiskinfo.desktop", dest = "/usr/share/applications/onyxdiskinfo.desktop", mode = "644" },
+    { source = "../../assets/icons/onyx-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/onyxdiskinfo.png", mode = "644" },
+    { source = "../../assets/logo.svg", dest = "/usr/share/icons/hicolor/scalable/apps/onyxdiskinfo.svg", mode = "644" },
+    { source = "../../LICENSE", dest = "/usr/share/licenses/onyxdiskinfo/LICENSE", mode = "644", doc = true },
+    { source = "../../README.md", dest = "/usr/share/doc/onyxdiskinfo/README.md", mode = "644", doc = true },
+]
+
+[package.metadata.generate-rpm.recommends]
+mesa-libEGL = "*"
+libwayland-client = "*"
+libX11-xcb = "*"
+libXcursor = "*"
+libXi = "*"
+libXrandr = "*"
