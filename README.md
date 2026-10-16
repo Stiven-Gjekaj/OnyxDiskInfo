@@ -38,7 +38,7 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > confidence. A SATA drive in a USB case reads through SAT on Windows, and
 > agrees with smartctl. The Linux and macOS paths for SATA wait for a test.
 > `onyx scan`, `onyx bench`, and `onyx test` work. The capacity test finds a
-> fake drive. The comparison of the benchmarks with fio is partly proven.
+> fake drive. The benchmarks agree with fio within 10 percent on Linux.
 > The desktop app shows the same values as `onyx health` on all three hosts.
 > `onyx format` and `onyx erase` work, and each host checks and mounts each
 > file system that Onyx writes. The erase commands of the firmware wait for
