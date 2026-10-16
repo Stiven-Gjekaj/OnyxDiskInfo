@@ -34,7 +34,7 @@ Every item has to be true, and not only probably true.
    hashes each one, attests each one, and opens a **draft** release. It
    refuses a tag that disagrees with the version in `Cargo.toml`, because that
    binary would name a release that it does not belong to.
-5. Open the draft. Read the list of assets: the nine files in the table
+5. Open the draft. Read the list of assets: the thirteen files in the table
    below and `SHA256SUMS`. Publish it.
 6. Get the checksums of the release:
 
@@ -93,8 +93,9 @@ of a release. Start it after the tap and the bucket hold the release:
     gh workflow run check-install.yml -f version=0.1.0
 
 It checks the checksum and the attestation of each file, installs the command
-line from the tap on macOS and on Linux, the app from the tap on macOS, and
-both from the bucket on Windows. After winget-pkgs takes the manifest, add
+line from the tap on macOS and on Linux, the app from the tap on macOS, both
+from the bucket on Windows, and the Linux packages in a clean Debian and a
+clean Fedora. After winget-pkgs takes the manifest, add
 `-f winget=true`.
 
 ## Test the workflow without a release
@@ -132,6 +133,10 @@ commit that the tag names, through the release workflow:
 | `OnyxDiskInfo-<version>-macos-universal.zip` | OnyxDiskInfo.app with `onyx` in it, macOS on each chip |
 | `OnyxDiskInfo-<version>-x86_64-pc-windows-msvc.zip` | OnyxDiskInfo.exe and onyx.exe, Windows on x86_64 |
 | `OnyxDiskInfo-<version>-aarch64-pc-windows-msvc.zip` | OnyxDiskInfo.exe and onyx.exe, Windows on arm64 |
+| `onyxdiskinfo_<version>-1_amd64.deb`, `onyxdiskinfo_<version>-1_arm64.deb` | The app and the command line, Debian and Ubuntu |
+| `onyxdiskinfo-<version>-1.x86_64.rpm`, `onyxdiskinfo-<version>-1.aarch64.rpm` | The app and the command line, Fedora and openSUSE |
 
-No release holds the app for Linux yet. It builds from source, and the README
-says how.
+The Linux packages need glibc 2.35 or later: Ubuntu 22.04, Debian 12,
+Fedora 36, or a later one. The release workflow installs each one on the
+runner, and the x86_64 packages in a clean Debian 12 and a clean Fedora 41,
+and starts the app on a virtual display.
