@@ -11,9 +11,13 @@ makes it and keeps it. fio then runs the jobs on it, then Onyx with
 in another way, and fio read such a file 20 percent slower than its own on an
 APFS drive, so two files would compare two layouts and not two tools.
 
-fio keeps `queue` commands in flight from one thread, as CrystalDiskMark
-defines a queue, with no cache of the host: libaio on Linux, windowsaio on
-Windows, and posixaio on macOS. A queue of threads is not the same job: each
+With a queue of one, fio sends one blocking `pread` or `pwrite` at a time
+with its psync engine, as Onyx does. The asynchronous engines are not the same
+job: on some Linux runners, libaio wrote 4 KiB at random 15 percent slower
+than psync on the same file, and Onyx matched psync there on each of ten
+runners. With a deeper queue, fio keeps `queue` commands in flight from one
+thread, as CrystalDiskMark defines a queue, with no cache of the host: libaio
+on Linux, windowsaio on Windows, and posixaio on macOS. A queue of threads is not the same job: each
 fio thread reads or writes its own sequential stream, and Onyx shares one
 stream between its threads. On one APFS drive, eight fio threads read at
 2.8 GB/s and wrote at 11 GB/s, faster than the drive can write.
@@ -22,8 +26,8 @@ macOS runs posixaio on four threads of its own (`kern.aiothreads`), so a
 queue deeper than four waits in fio and not in the drive. On one APFS drive,
 fio read at 7.0 GB/s with a queue of eight from its own file, and at 1.2 to
 2.2 GB/s from the file of Onyx, while fio with a queue of one and Onyx agreed
-on that file. So on macOS only the jobs with a queue of one are compared.
-Linux compares all four.
+on that file. So on macOS only the jobs with a queue of one are compared. They take psync,
+as on each host. Linux compares all four.
 
 fio runs before Onyx and after it. A job passes when the speed of Onyx is
 within 10 percent of the range that the two runs of fio span: at least 90
@@ -64,7 +68,9 @@ def fio(path, rw, bs, queue):
     """The speed of fio, in bytes per second, with `queue` commands in flight,
     or None when fio cannot run the job on this host."""
     system = platform.system()
-    if system == "Linux":
+    if queue == 1:
+        options = ["--ioengine=psync"]
+    elif system == "Linux":
         options = ["--ioengine=libaio", f"--iodepth={queue}"]
     elif system == "Windows":
         options = ["--ioengine=windowsaio", f"--iodepth={queue}"]
@@ -92,10 +98,13 @@ def main():
     if os.path.exists(test_file):
         sys.exit(f"{test_file} exists. Remove it, or name another directory.")
 
+    # Each read job first, then each write job, in the order of
+    # CrystalDiskMark and of Onyx.
     def fio_pass():
         speeds = {}
-        for name, read, write, bs, queue in JOBS:
+        for name, read, _, bs, queue in JOBS:
             speeds[(name, False)] = fio(test_file, read, bs, queue)
+        for name, _, write, bs, queue in JOBS:
             speeds[(name, True)] = fio(test_file, write, bs, queue)
         return speeds
 
