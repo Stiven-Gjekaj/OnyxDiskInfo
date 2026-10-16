@@ -228,6 +228,34 @@ jobs:
           test -f /usr/share/applications/onyxdiskinfo.desktop
           sudo apt-get remove -y onyxdiskinfo
 
+      # A runner holds many libraries, so the check above cannot show that
+      # the packages name each one that the app needs. A minimal container
+      # holds only what the package pulls in. Docker runs x86_64 containers
+      # here, so the x86_64 job does this for both packages.
+      - name: install each package in a clean container and start the app
+        if: matrix.deb == 'amd64'
+        run: |
+          set -euo pipefail
+          cat > start.sh <<'SH'
+          set -u
+          export ONYX_NO_TRAY=1
+          onyx --version
+          xvfb-run -a timeout 10 OnyxDiskInfo
+          code=$?
+          if [ "$code" != 124 ]; then
+            echo "OnyxDiskInfo stopped with code $code before ten seconds" >&2
+            exit 1
+          fi
+          echo "OnyxDiskInfo ran for ten seconds in $(. /etc/os-release; echo "$PRETTY_NAME")"
+          SH
+          docker run --rm -v "$PWD:/w" -w /w debian:12-slim sh -c '
+            apt-get update -qq &&
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends               ./out/onyxdiskinfo_*_amd64.deb xvfb xauth > /dev/null &&
+            sh start.sh'
+          docker run --rm -v "$PWD:/w" -w /w fedora:41 sh -c '
+            dnf install -y -q --setopt=install_weak_deps=False               ./out/onyxdiskinfo-*.x86_64.rpm xorg-x11-server-Xvfb xorg-x11-xauth which > /dev/null &&
+            sh start.sh'
+
       - name: read the RPM package
         run: |
           sudo apt-get install -y rpm > /dev/null
