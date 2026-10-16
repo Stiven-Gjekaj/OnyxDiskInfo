@@ -21,7 +21,7 @@ P4 is done.
 P5 is done. P6 is done but for the erase commands of the firmware, which
 wait for a drive to test them. P7 is done but for a look at the tray icon on
 a screen. P8 is done but for winget, where Microsoft reviews the package.
-Version 0.1.0 is out.
+Version 0.2.0 is out.
 
 ```mermaid
 flowchart LR
@@ -378,8 +378,19 @@ Microsoft.
     is in /Applications, sealed, for both chips, at version 0.1.0;
   - `scoop install stiven-gjekaj/onyxdiskinfo` on Windows: `onyx 0.1.0`,
     `onyx list`, and the app.
-- The winget manifest went to winget-pkgs in
+- The winget manifest of 0.1.0 went to winget-pkgs in
   [pull request 450615](https://github.com/microsoft/winget-pkgs/pull/450615).
+  It was closed unmerged when 0.2.0 replaced it.
+- Version 0.2.0 is out, from the tag `v0.2.0` on commit `e11370b`, after CI
+  passed on that commit. It adds the Debian and RPM packages, so the release
+  holds thirteen files. Each checksum and each attestation of the draft held
+  before it was published.
+- The tap and the bucket point at 0.2.0. `check-install.yml` passed again:
+  Homebrew on macOS and on Linux and Scoop gave `onyx 0.2.0`, the cask app
+  is at version 0.2.0, and the .deb in Debian 12 and the .rpm in Fedora 41
+  installed and ran `onyx` and the app.
+- The winget manifest of 0.2.0 went to winget-pkgs in
+  [pull request 454172](https://github.com/microsoft/winget-pkgs/pull/454172).
   It validates against the JSON schemas of 1.12.0, and each download matches
   its hash. The CLA is accepted on it.
 
