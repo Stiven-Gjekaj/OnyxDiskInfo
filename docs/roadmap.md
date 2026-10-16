@@ -17,7 +17,7 @@ The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
 open, because no SATA drive is at hand.
 P3 is done on Windows. A SATA drive in a USB case waits for Linux and
 macOS.
-P4 is done but for its benchmark half, which is partly proven.
+P4 is done.
 P5 is done. P6 is done but for the erase commands of the firmware, which
 wait for a drive to test them. P7 is done but for a look at the tray icon on
 a screen. P8 is done but for winget, where Microsoft reviews the package.
@@ -184,29 +184,46 @@ Result: done, on Linux in CI.
   calls it fake, finds that it wraps every 64 MiB, and brackets the real end
   between 66,960,896 and 67,223,552 bytes. A loop device of 64 MiB is the
   control, and Onyx calls it genuine.
-- The benchmark half is partly proven, and not done.
+- The benchmark half is done, on Linux.
   `scripts/check-bench.py` runs the jobs of CrystalDiskMark with fio and with
-  `onyx bench --file`, on one shared test file, and fio runs twice. A job
-  passes when Onyx is within 10 percent of the range of the two runs of fio.
+  `onyx bench --file`, on one shared test file. fio runs before Onyx and
+  after it, and a job passes when Onyx is within 10 percent of the range of
+  the two runs of fio.
 
-  On a cloud runner of Linux, with libaio: all eight measurements passed in
-  two runs, and failed in two. Two runs of fio in one job differed by up to
-  28 percent there, so CI reports the check and does not fail on it.
+  On 2026-10-16 the check ran on six Linux runners at once, of three kinds
+  of CPU (AMD EPYC 7763, AMD EPYC 9V45, Intel Xeon 6973P-C). All 48
+  measurements passed: eight jobs on each runner.
 
-  On the APPLE SSD of a MacBook Air, with posixaio: only the jobs with a
-  queue of one compare, because macOS runs posixaio on four threads and fio
-  cannot hold 32 jobs in the shared memory of macOS. The SEQ1M Q1T1 write
-  and the RND4K Q1T1 write passed in each of four runs. The reads did not
-  hold still: fio read the same file at 5.0 to 5.3 GB/s in one run and at
-  1.4 to 2.1 GB/s in the next, and Onyx read 4K at 61 to 76 MB/s.
+  The way there: in earlier runs Onyx wrote 4 KiB at random up to 25 percent
+  faster than fio. Experiments on 16 runners found why.
+  Neither the bytes of a write nor offsets that repeat changed fio. The
+  engine did: with a queue of one, Onyx sends one blocking `pwrite`, as the
+  psync engine of fio does, and on some runners libaio wrote 15 percent
+  slower than psync. Onyx matched psync on each runner. So a queue of one
+  now compares with psync, and a deeper queue with libaio.
 
-  What the check found and fixed on the way: a test file that another
-  program writes is laid out in another way, and fio read such a file 20
-  percent slower than its own. A queue of fio threads is not the queue of
+  On two kinds of runner, an Intel Xeon 8573C and an AMD EPYC 9V74, Onyx
+  read 4 KiB at random 20 to 25 percent slower than fio, in each round. Onyx ran each read
+  job right after the write job before it, and the heaviest write came just
+  before that read. Onyx now runs each read job first, then each write job,
+  as CrystalDiskMark does, and fio in the check does the same. Neither kind
+  of runner came again in the six runs after the change, so the change is
+  not proven on them.
+
+  On the APPLE SSD of a MacBook Air, the jobs with a queue of one passed.
+  macOS runs posixaio on four threads, so fio cannot compare a deeper queue
+  there.
+
+  CI still reports the check and does not fail on it. A cloud disk can change
+  its speed between two runs of fio by 28 percent, which no tool controls.
+
+  What the check found and fixed before: a test file that another program
+  writes is laid out in another way, and fio read such a file 20 percent
+  slower than its own. A queue of fio threads is not the queue of
   CrystalDiskMark: eight threads wrote at 11 GB/s on a drive that cannot.
 
-  Open: a run on a quiet drive, or a side by side run with CrystalDiskMark on
-  Windows.
+  Open: the Xeon 8573C and EPYC 9V74 runners, and a side by side run with
+  CrystalDiskMark on Windows.
 
 What the first run of the capacity test found: a fake drive rarely puts its
 real end on the start of a probe, so the first probe past the end reads back
