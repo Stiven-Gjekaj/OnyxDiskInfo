@@ -36,13 +36,13 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > `onyx health` reads an NVMe drive on all three hosts, and agrees with
 > smartctl. A drive that reports nothing gets a measured record with a low
 > confidence. A SATA drive in a USB case reads through SAT on Windows, and
-> agrees with smartctl. The Linux and macOS paths for SATA wait for a test.
+> agrees with smartctl. The Linux path for SATA is not tested, and macOS has none.
 > `onyx scan`, `onyx bench`, and `onyx test` work. The capacity test finds a
 > fake drive. The benchmarks agree with fio within 10 percent on Linux.
 > The desktop app shows the same values as `onyx health` on all three hosts.
 > `onyx format` and `onyx erase` work, and each host checks and mounts each
-> file system that Onyx writes. The erase commands of the firmware wait for
-> a drive to test them. `onyx watch` keeps a history of each drive and gives
+> file system that Onyx writes. Onyx sends no erase command of the
+> firmware. `onyx watch` keeps a history of each drive and gives
 > an alert when one gets worse.
 > Version 0.2.0 is out, through Homebrew, Scoop, and a Debian and an RPM
 > package. winget follows.
