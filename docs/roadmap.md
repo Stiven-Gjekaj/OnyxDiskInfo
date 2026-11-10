@@ -15,13 +15,16 @@ P0 and P1 are done. `onyx list` runs on Windows, on macOS, and on Linux.
 P2 passes its exit test for NVMe drives, and for a SATA drive on Windows.
 The owner chose on 2026-10-10 to start P3 while the SATA half of P2 stays
 open, because no SATA drive is at hand.
-P3 is done on Windows. A SATA drive in a USB case waits for Linux and
-macOS.
-P4 is done.
-P5 is done. P6 is done but for the erase commands of the firmware, which
-wait for a drive to test them. P7 is done but for a look at the tray icon on
-a screen. P8 is done but for winget, where Microsoft reviews the package.
+P3 is done on Windows.
+P4 is done but for a side by side run with CrystalDiskMark and a surface
+scan of a real drive.
+P5 and P6 are done. P7 is done but for a look at the tray icon on a screen.
+P8 is done but for winget, where Microsoft reviews the package.
 Version 0.2.0 is out.
+
+On 2026-11-11 the owner dropped each open item that no drive, host, or
+runner at hand can test. [milestones.md](milestones.md) lists them and says
+why.
 
 ```mermaid
 flowchart LR
@@ -71,7 +74,7 @@ The serial number and the firmware agree on Linux and on Windows.
 `system_profiler`, on one Mac with an internal SSD and three USB sticks.
 Five CI runs passed, on Hyper-V SCSI and NVMe disks and on macOS disk images.
 
-Open: one Linux runner gave the serial `2` from its virtual disk, and `lsblk`
+One Linux runner gave the serial `2` from its virtual disk, and `lsblk`
 gave the NAA name. That runner did not come back in four later runs.
 The script prints the sources of the serial when this happens again.
 
@@ -109,13 +112,10 @@ verdict Good, 26 attributes. `scripts/check-health.py` compared it with
 IDENTIFY DEVICE, SMART READ DATA, and SMART READ THRESHOLDS blocks of that
 drive, captured with `smartctl -r ioctl,2`, with the serial number masked.
 
-Open for SATA:
+SATA on Linux and on macOS is dropped. No SATA drive can reach a Linux host
+here, and macOS needs a SAT driver that lowers the boot security. The Linux
+code stays in, not tested.
 
-- Linux sends the same commands through `SG_IO`. No SATA drive has answered
-  them on Linux yet. A VM could not take the drive: the USB pass-through of
-  UTM reset the bridge again and again.
-- macOS has no ATA path yet. It needs `IOATASMARTInterface`, and for a USB
-  case a SAT driver that the person installs.
 - `onyx list` on Windows shows what the bridge says: the model without its
   last letter, the serial number of the bridge, and four characters of the
   firmware. `onyx health` shows what the drive says. The list asks no drive
@@ -133,8 +133,8 @@ Work:
 Exit test: a SATA drive in a USB case shows its SMART.
 A USB flash drive with no SMART shows a record with a low confidence level.
 
-Result: the second half is done. The first half waits for a SATA drive in a
-USB case.
+Result: done on Windows. A SATA drive in a USB case shows its SMART through
+SAT on Windows. Linux and macOS are dropped, as in P2.
 
 - Done: each health record names its source and its confidence. A drive
   that reports nothing gets a measured record with a low confidence. CI
@@ -222,8 +222,7 @@ Result: done, on Linux in CI.
   slower than its own. A queue of fio threads is not the queue of
   CrystalDiskMark: eight threads wrote at 11 GB/s on a drive that cannot.
 
-  Open: the Xeon 8573C and EPYC 9V74 runners, and a side by side run with
-  CrystalDiskMark on Windows.
+  Open: a side by side run with CrystalDiskMark on Windows.
 
 What the first run of the capacity test found: a fake drive rarely puts its
 real end on the start of a probe, so the first probe past the end reads back
@@ -231,9 +230,10 @@ from the middle of a probe below. The first version marked only the start of
 each probe, and called that a dropped write. Each sector of 512 bytes now
 carries its own address.
 
-Not yet run on a real drive: the surface scan, the write test, and the
-capacity test. They ran on memory, on files, and on the device mapper. A scan
-of the USB stick of P3 takes about 100 minutes, and the write test erases it.
+Open: a surface scan of a real drive. It reads only, so the USB stick of P3
+can take it. A scan of that stick takes about 100 minutes. The write test
+and the capacity test ran on memory, on files, and on the device mapper.
+They erase a drive, and no drive that can be erased is at hand.
 
 ## P5: the desktop app
 
@@ -311,9 +311,8 @@ What the work found:
   host started a worker after the time of the job was up. Each worker now
   sends one command at least. A Windows runner found it.
 
-Open: ATA Secure Erase, NVMe Format, and NVMe Sanitize. They need a drive
-that can be erased to test them, and none is at hand.
-[milestones.md](milestones.md) says why they wait.
+ATA Secure Erase, NVMe Format, and NVMe Sanitize are dropped.
+[milestones.md](milestones.md) says why.
 
 ## P7: history and alerts
 

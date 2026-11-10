@@ -193,7 +193,8 @@ disk.
 Each erase reads a sample back and shows the result.
 
 **The overwrite passes and the full TRIM come first. The commands of the
-firmware wait for a drive to test them.** Decided on 2026-10-11.
+firmware wait for a drive to test them.** Decided on 2026-10-11. Dropped on
+2026-11-11, as the next decision says.
 An overwrite and a TRIM can be tested on a disk image that each host
 attaches, and CI does that. A firmware erase cannot: it goes to a real
 drive, it cannot be stopped, and a wrong command can lock a drive with a
@@ -265,6 +266,26 @@ Options that lost:
 **The command line comes first. The desktop app comes in phase 5.**
 The command line proves each host backend on all three hosts.
 The app is then a view over code that works.
+
+**An item that nothing at hand can test is dropped, not left open.**
+Decided on 2026-11-11.
+An open item that waits for hardware that never comes says that work is
+still to do, and none can be done. These are dropped:
+
+- SATA through `SG_IO` on Linux. The code is in `onyx-probe` and runs, but
+  no SATA drive has answered it, and the readme says so. The only SATA drive at hand holds a Windows
+  install, and the USB pass-through of UTM reset its bridge again and again.
+- SATA on macOS. It needs `IOATASMARTInterface`, and for a USB case a SAT
+  driver that lowers the boot security of the Mac.
+- ATA Secure Erase, NVMe Format, and NVMe Sanitize. No drive that can be
+  erased is at hand, and a wrong command can lock a drive.
+- The write test and the capacity test on a real drive, for the same reason.
+  They pass on memory, on files, and on the device mapper.
+- The benchmark on the Intel Xeon 8573C and the AMD EPYC 9V74 runners. A job
+  cannot ask GitHub for a kind of runner, and neither came again in six runs.
+- The Linux runner that gave the serial `2`. It did not come again.
+
+A drive or a runner that comes later brings its item back.
 
 ---
 
