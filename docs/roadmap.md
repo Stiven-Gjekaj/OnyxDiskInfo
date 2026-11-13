@@ -20,7 +20,7 @@ P4 is done but for a side by side run with CrystalDiskMark and a surface
 scan of a real drive.
 P5 and P6 are done. P7 is done but for a look at the tray icon on a screen.
 P8 is done but for winget, where Microsoft reviews the package.
-Version 1.0.0 is out.
+Version 1.1.0 is out.
 
 On 2026-11-11 the owner dropped each open item that no drive, host, or
 runner at hand can test. [milestones.md](milestones.md) lists them and says
@@ -399,8 +399,19 @@ Microsoft.
   and `check-install.yml` passed again: Homebrew on macOS and on Linux,
   Scoop, the .deb in Debian 12, and the .rpm in Fedora 41 each gave
   `onyx 1.0.0`.
+- Version 1.1.0 is out, from the tag `v1.1.0` on commit `2075451`, after CI
+  passed on that commit. It adds the experimental paths. Its first run
+  waited for an Apple silicon runner for the app until GitHub gave up, so
+  the app now builds on an Intel runner, and the tag moved before anything
+  was published. The app still holds both chips. Each checksum and each
+  attestation of the thirteen files held, and `check-install.yml` passed:
+  Homebrew on macOS and on Linux, Scoop, the .deb in Debian 12, and the
+  .rpm in Fedora 41 each gave `onyx 1.1.0`.
 - The winget manifest of 0.2.0 went to winget-pkgs in
   [pull request 454172](https://github.com/microsoft/winget-pkgs/pull/454172).
+  It was closed unmerged when 1.1.0 replaced it.
+- The winget manifest of 1.1.0 went to winget-pkgs in
+  [pull request 479787](https://github.com/microsoft/winget-pkgs/pull/479787).
   It validates against the JSON schemas of 1.12.0, and each download matches
   its hash. The CLA is accepted on it.
 
