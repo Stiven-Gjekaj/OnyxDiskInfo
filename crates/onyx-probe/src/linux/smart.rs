@@ -64,7 +64,7 @@ fn open(node: &str) -> Result<File> {
 
 /// The error for a call that the host refused, with missing rights as their
 /// own error.
-fn refused(e: io::Error, what: &str) -> Error {
+pub(super) fn refused(e: io::Error, what: &str) -> Error {
     match e.raw_os_error() {
         Some(libc::EACCES) | Some(libc::EPERM) => Error::NeedsPrivilege {
             what: what.to_string(),
@@ -73,7 +73,7 @@ fn refused(e: io::Error, what: &str) -> Error {
     }
 }
 
-fn nvme_admin(file: &File, node: &str, command: NvmeCommand) -> Result<Vec<u8>> {
+pub(super) fn nvme_admin(file: &File, node: &str, command: NvmeCommand) -> Result<Vec<u8>> {
     let mut data = vec![0u8; command.data_len as usize];
     let mut bytes = passthru::nvme_command_bytes(command, data.as_mut_ptr() as u64);
     // SAFETY: the command holds the address and the length of `data`, which
@@ -112,13 +112,34 @@ pub fn nvme_health(node: &str) -> Result<RawHealth> {
 
 /// Send one ATA command through `SG_IO`. `Ok(None)` means the drive or the
 /// bridge refused the command.
-fn ata_command(file: &File, node: &str, command: AtaCommand) -> Result<Option<Vec<u8>>> {
+pub(super) fn ata_command(file: &File, node: &str, command: AtaCommand) -> Result<Option<Vec<u8>>> {
     let cdb = passthru::ata_pass_through_16(command);
     let mut data = vec![0u8; 512];
+    let status = sg_io(
+        file,
+        node,
+        &cdb,
+        passthru::SG_DXFER_FROM_DEV,
+        &mut data,
+        TIMEOUT_MS,
+    )?;
+    Ok(status.succeeded().then_some(data))
+}
+
+/// Send one SCSI command through `SG_IO`, with `data` going the way that
+/// `direction` names.
+pub(super) fn sg_io(
+    file: &File,
+    node: &str,
+    cdb: &[u8; 16],
+    direction: i32,
+    data: &mut [u8],
+    timeout_ms: u32,
+) -> Result<SgStatus> {
     let mut sense = [0u8; 32];
     let mut header = SgIoHdr {
         interface_id: i32::from(b'S'),
-        dxfer_direction: passthru::SG_DXFER_FROM_DEV,
+        dxfer_direction: direction,
         cmd_len: cdb.len() as u8,
         mx_sb_len: sense.len() as u8,
         iovec_count: 0,
@@ -126,7 +147,7 @@ fn ata_command(file: &File, node: &str, command: AtaCommand) -> Result<Option<Ve
         dxferp: data.as_mut_ptr().cast(),
         cmdp: cdb.as_ptr(),
         sbp: sense.as_mut_ptr(),
-        timeout: TIMEOUT_MS,
+        timeout: timeout_ms,
         flags: 0,
         pack_id: 0,
         usr_ptr: std::ptr::null_mut(),
@@ -146,12 +167,11 @@ fn ata_command(file: &File, node: &str, command: AtaCommand) -> Result<Option<Ve
     if answer < 0 {
         return Err(refused(io::Error::last_os_error(), node));
     }
-    let status = SgStatus {
+    Ok(SgStatus {
         status: header.status,
         host_status: header.host_status,
         driver_status: header.driver_status,
-    };
-    Ok(status.succeeded().then_some(data))
+    })
 }
 
 /// Read the identify data, the SMART data, and the thresholds of a drive

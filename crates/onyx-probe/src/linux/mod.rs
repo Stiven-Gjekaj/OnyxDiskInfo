@@ -5,6 +5,8 @@
 //! pure function that the tests run on all three hosts.
 
 #[cfg(target_os = "linux")]
+pub mod erase;
+#[cfg(target_os = "linux")]
 pub mod host;
 #[cfg(target_os = "linux")]
 pub mod open;

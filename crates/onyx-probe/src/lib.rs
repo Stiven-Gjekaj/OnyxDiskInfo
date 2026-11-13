@@ -120,6 +120,56 @@ pub fn read_health_with(drive: &DriveInfo, experimental: bool) -> Result<RawHeal
     }
 }
 
+/// Why `method` does not fit a drive on `bus`, or `None` when it fits. An
+/// ATA erase goes to a drive that is not NVMe, and an NVMe erase to an NVMe
+/// drive.
+pub fn erase_bus_refusal(bus: onyx_core::Bus, method: firmware::Method) -> Option<String> {
+    let nvme = bus == onyx_core::Bus::Nvme;
+    match (nvme, method.is_ata()) {
+        (true, true) => Some("The drive is an NVMe drive, and the erase is for ATA.".to_string()),
+        (false, false) => {
+            Some("The drive is not an NVMe drive, and the erase is for NVMe.".to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Send an erase of the firmware to a drive that the caller opened for
+/// writing, and wait until it ends. Experimental: no drive has taken one
+/// from Onyx yet. Only Linux sends one.
+///
+/// `step` hears what happens: a short text, and the part of the erase that
+/// is done when the drive says it.
+pub fn firmware_erase(
+    drive: &DriveInfo,
+    file: &std::fs::File,
+    method: firmware::Method,
+    step: &mut dyn FnMut(&str, Option<f64>),
+) -> Result<()> {
+    let refusal = |reason: String| Error::EraseRefused {
+        name: drive.name.clone(),
+        method: method.name().to_string(),
+        reason,
+    };
+    if let Some(why) = erase_bus_refusal(drive.bus, method) {
+        return Err(refusal(why));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux::erase::erase(file, &drive.node, &drive.name, method, step)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (file, step);
+        let host = if cfg!(target_os = "macos") {
+            "macOS gives a program no way to send an erase command of the firmware."
+        } else {
+            "Only the Linux build of Onyx sends an erase command of the firmware."
+        };
+        Err(refusal(host.to_string()))
+    }
+}
+
 /// The host that this build runs on, as `smartctl` names its drives.
 fn smartctl_host() -> Option<smartctl::Host> {
     if cfg!(target_os = "linux") {
@@ -162,4 +212,32 @@ pub fn health_record_with(drive: &DriveInfo, experimental: bool) -> Result<Recor
         ));
     }
     Ok(Record::measured(sample::sample(drive)?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use firmware::Method;
+    use onyx_core::{Bus, DriveId};
+
+    #[test]
+    fn an_erase_goes_only_to_a_drive_of_its_own_kind() {
+        assert!(erase_bus_refusal(Bus::Nvme, Method::NvmeFormat).is_none());
+        assert!(erase_bus_refusal(Bus::Sata, Method::AtaSecureErase).is_none());
+        assert!(erase_bus_refusal(Bus::Usb, Method::AtaEnhancedSecureErase).is_none());
+        assert!(erase_bus_refusal(Bus::Nvme, Method::AtaSecureErase).is_some());
+        assert!(erase_bus_refusal(Bus::Usb, Method::NvmeCryptoSanitize).is_some());
+    }
+
+    #[test]
+    fn an_erase_of_the_wrong_kind_is_refused_before_any_command() {
+        let mut drive = DriveInfo::new(DriveId::new("sdz"), "/dev/null", "a drive");
+        drive.bus = Bus::Sata;
+        let file = std::fs::File::open(std::env::temp_dir()).unwrap();
+        let mut steps = 0;
+        let e =
+            firmware_erase(&drive, &file, Method::NvmeFormat, &mut |_, _| steps += 1).unwrap_err();
+        assert!(matches!(e, Error::EraseRefused { .. }), "{e}");
+        assert_eq!(steps, 0);
+    }
 }
