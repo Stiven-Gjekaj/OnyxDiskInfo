@@ -36,13 +36,14 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > `onyx health` reads an NVMe drive on all three hosts, and agrees with
 > smartctl. A drive that reports nothing gets a measured record with a low
 > confidence. A SATA drive in a USB case reads through SAT on Windows, and
-> agrees with smartctl. The Linux path for SATA is not tested, and macOS has none.
+> agrees with smartctl. The Linux path for SATA is not tested. The macOS
+> path is experimental and not tested.
 > `onyx scan`, `onyx bench`, and `onyx test` work. The capacity test finds a
 > fake drive. The benchmarks agree with fio within 10 percent on Linux.
 > The desktop app shows the same values as `onyx health` on all three hosts.
 > `onyx format` and `onyx erase` work, and each host checks and mounts each
-> file system that Onyx writes. Onyx sends no erase command of the
-> firmware. `onyx watch` keeps a history of each drive and gives
+> file system that Onyx writes. The erase commands of the firmware are
+> experimental, on Linux only, and not tested. `onyx watch` keeps a history of each drive and gives
 > an alert when one gets worse.
 > Version 0.2.0 is out, through Homebrew, Scoop, and a Debian and an RPM
 > package. winget follows.
@@ -126,6 +127,28 @@ many blocks still give old bytes.
 A command that reads never writes.
 A command that writes asks you to confirm the drive, and it refuses the disk
 that the running system starts from.
+
+### Experimental
+
+> [!CAUTION]
+> **DO NOT TOUCH IF NOT SURE.** No drive has answered these paths yet. They
+> can give wrong results, or fail in a way that nobody has seen. A failed
+> erase of the firmware can leave a drive locked or unusable.
+
+```
+onyx health <number> --experimental
+onyx erase <number> --firmware <method> --experimental
+```
+
+`health --experimental` also reads the SMART data of a SATA drive on macOS.
+`erase --firmware` tells the drive to erase itself, on Linux only. The
+methods are `secure-erase` and `enhanced-secure-erase` for a SATA drive, and
+`format`, `crypto-format`, `sanitize`, and `crypto-sanitize` for an NVMe
+drive. Onyx refuses a drive that says it cannot take the erase, before it
+asks you to confirm. An ATA erase sets the password `onyx` first. If it
+stops in the middle, the error names the `hdparm` command that takes the
+password off. Please report what each path does in an
+[issue](https://github.com/Stiven-Gjekaj/OnyxDiskInfo/issues).
 
 ## Install
 
