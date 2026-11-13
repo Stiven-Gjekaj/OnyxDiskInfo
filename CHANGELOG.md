@@ -6,6 +6,13 @@
 
 Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 
+## 1.0.0 - 2026-11-13
+
+The first stable release. The program is the same as 0.2.0.
+
+From this release, a change that breaks a flag of the command line or a
+field of the `--json` output needs a new major version.
+
 ## 0.2.0 - 2026-10-16
 
 ### Added
