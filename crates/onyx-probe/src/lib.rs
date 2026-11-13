@@ -243,10 +243,16 @@ mod tests {
     fn an_erase_of_the_wrong_kind_is_refused_before_any_command() {
         let mut drive = DriveInfo::new(DriveId::new("sdz"), "/dev/null", "a drive");
         drive.bus = Bus::Sata;
-        let file = std::fs::File::open(std::env::temp_dir()).unwrap();
+        // A directory does not open as a file on Windows, so the test makes
+        // a file of its own.
+        let path = std::env::temp_dir().join(format!("onyx-refuse-{}.img", std::process::id()));
+        std::fs::write(&path, [0u8; 512]).unwrap();
+        let file = std::fs::File::open(&path).unwrap();
         let mut steps = 0;
         let e =
             firmware_erase(&drive, &file, Method::NvmeFormat, &mut |_, _| steps += 1).unwrap_err();
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
         assert!(matches!(e, Error::EraseRefused { .. }), "{e}");
         assert_eq!(steps, 0);
     }
