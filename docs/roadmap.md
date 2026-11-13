@@ -24,7 +24,9 @@ Version 0.2.0 is out.
 
 On 2026-11-11 the owner dropped each open item that no drive, host, or
 runner at hand can test. [milestones.md](milestones.md) lists them and says
-why.
+why. On 2026-11-13, after 1.0.0, two of them came back as experimental
+code that nobody has tested: SATA on macOS, and the erases of the firmware
+on Linux.
 
 ```mermaid
 flowchart LR
@@ -114,7 +116,8 @@ drive, captured with `smartctl -r ioctl,2`, with the serial number masked.
 
 SATA on Linux and on macOS is dropped. No SATA drive can reach a Linux host
 here, and macOS needs a SAT driver that lowers the boot security. The Linux
-code stays in, not tested.
+code stays in, not tested. The macOS code is experimental, and
+`onyx health --experimental` runs it.
 
 - `onyx list` on Windows shows what the bridge says: the model without its
   last letter, the serial number of the bridge, and four characters of the
@@ -311,7 +314,9 @@ What the work found:
   host started a worker after the time of the job was up. Each worker now
   sends one command at least. A Windows runner found it.
 
-ATA Secure Erase, NVMe Format, and NVMe Sanitize are dropped.
+ATA Secure Erase, NVMe Format, and NVMe Sanitize are dropped as tested
+work. They ship as experimental code on Linux, and
+`onyx erase --firmware <method> --experimental` runs them.
 [milestones.md](milestones.md) says why.
 
 ## P7: history and alerts

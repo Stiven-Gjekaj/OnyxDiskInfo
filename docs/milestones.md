@@ -194,7 +194,8 @@ Each erase reads a sample back and shows the result.
 
 **The overwrite passes and the full TRIM come first. The commands of the
 firmware wait for a drive to test them.** Decided on 2026-10-11. Dropped on
-2026-11-11, as the next decision says.
+2026-11-11, and shipped as experimental code on 2026-11-13, as the decisions
+under "The order of the work" say.
 An overwrite and a TRIM can be tested on a disk image that each host
 attaches, and CI does that. A firmware erase cannot: it goes to a real
 drive, it cannot be stopped, and a wrong command can lock a drive with a
@@ -273,8 +274,9 @@ An open item that waits for hardware that never comes says that work is
 still to do, and none can be done. These are dropped:
 
 - SATA through `SG_IO` on Linux. The code is in `onyx-probe` and runs, but
-  no SATA drive has answered it, and the readme says so. The only SATA drive at hand holds a Windows
-  install, and the USB pass-through of UTM reset its bridge again and again.
+  no SATA drive has answered it, and the readme says so. The only SATA drive
+  at hand holds a Windows install, and the USB pass-through of UTM reset its
+  bridge again and again.
 - SATA on macOS. It needs `IOATASMARTInterface`, and for a USB case a SAT
   driver that lowers the boot security of the Mac.
 - ATA Secure Erase, NVMe Format, and NVMe Sanitize. No drive that can be
@@ -286,6 +288,25 @@ still to do, and none can be done. These are dropped:
 - The Linux runner that gave the serial `2`. It did not come again.
 
 A drive or a runner that comes later brings its item back.
+
+**Two dropped items ship as experimental code.** Decided on 2026-11-13, after
+1.0.0.
+The owner chose to have the code written for SATA on macOS and for the
+erases of the firmware, and to ship it untested behind a flag. No drive has
+answered it, so each path runs only when the person asks for it by name, and
+each one prints "DO NOT TOUCH IF NOT SURE" first.
+
+- `onyx health --experimental` also reads ATA SMART on macOS, through
+  `ATASMARTLib.plugin`. The table of calls and the UUIDs come from the header
+  of the macOS SDK. Without the flag, nothing changes.
+- `onyx erase --firmware <method> --experimental` sends ATA Secure Erase,
+  NVMe Format, or NVMe Sanitize, on Linux only. macOS gives a program no
+  way to send them. Onyx refuses a drive whose identify data says that it
+  cannot take the erase: a frozen drive, a drive with a password, a method
+  that the drive lacks, an NVMe drive that can hold more than one
+  namespace. It refuses before the person types the phrase. An ATA erase
+  sets the user password `onyx` first, and each error after that names the
+  `hdparm` command that takes it off.
 
 ---
 
