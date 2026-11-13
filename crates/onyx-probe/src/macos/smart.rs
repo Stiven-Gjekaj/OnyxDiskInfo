@@ -40,7 +40,7 @@ const NVME_SMART_INTERFACE: [u8; 16] = [
 ];
 
 /// `kIOCFPlugInInterfaceID`: C244E858-109C-11D4-91D4-0050E4C6426F.
-const CF_PLUGIN_INTERFACE: [u8; 16] = [
+pub(super) const CF_PLUGIN_INTERFACE: [u8; 16] = [
     0xc2, 0x44, 0xe8, 0x58, 0x10, 0x9c, 0x11, 0xd4, 0x91, 0xd4, 0x00, 0x50, 0xe4, 0xc6, 0x42, 0x6f,
 ];
 
@@ -53,15 +53,15 @@ const IDENTIFY_BYTES: usize = 4096;
 /// The size of the health log, in bytes.
 const LOG_BYTES: usize = 512;
 
-type QueryInterface =
+pub(super) type QueryInterface =
     unsafe extern "C" fn(this: *mut c_void, iid: CFUUIDBytes, out: *mut *mut c_void) -> i32;
-type Release = unsafe extern "C" fn(this: *mut c_void) -> u32;
+pub(super) type Release = unsafe extern "C" fn(this: *mut c_void) -> u32;
 
 /// The start of every COM interface: `IUNKNOWN_C_GUTS`.
 #[repr(C)]
-struct PlugIn {
+pub(super) struct PlugIn {
     _reserved: *mut c_void,
-    query_interface: QueryInterface,
+    pub(super) query_interface: QueryInterface,
     _add_ref: Release,
     release: Release,
 }
@@ -82,18 +82,18 @@ struct NvmeSmart {
 
 #[link(name = "IOKit", kind = "framework")]
 unsafe extern "C" {
-    fn IOCreatePlugInInterfaceForService(
+    pub(super) fn IOCreatePlugInInterfaceForService(
         service: io_object_t,
         plugin_type: CFUUIDRef,
         interface_type: CFUUIDRef,
         the_interface: *mut *mut *mut PlugIn,
         the_score: *mut i32,
     ) -> i32;
-    fn IODestroyPlugInInterface(interface: *mut *mut PlugIn) -> i32;
+    pub(super) fn IODestroyPlugInInterface(interface: *mut *mut PlugIn) -> i32;
 }
 
 /// An IOKit object that this code owns, released when it goes.
-struct Object(io_object_t);
+pub(super) struct Object(pub(super) io_object_t);
 
 impl Drop for Object {
     fn drop(&mut self) {
@@ -104,7 +104,7 @@ impl Drop for Object {
     }
 }
 
-fn uuid(bytes: [u8; 16]) -> CFUUIDRef {
+pub(super) fn uuid(bytes: [u8; 16]) -> CFUUIDRef {
     let [
         byte0,
         byte1,
@@ -145,7 +145,7 @@ fn uuid(bytes: [u8; 16]) -> CFUUIDRef {
     unsafe { CFUUIDCreateFromUUIDBytes(kCFAllocatorDefault, raw) }
 }
 
-fn uuid_bytes(bytes: [u8; 16]) -> CFUUIDBytes {
+pub(super) fn uuid_bytes(bytes: [u8; 16]) -> CFUUIDBytes {
     let id = uuid(bytes);
     // SAFETY: the UUID was created above and is released once, here.
     let out = unsafe { core_foundation_sys::uuid::CFUUIDGetUUIDBytes(id) };
@@ -154,9 +154,9 @@ fn uuid_bytes(bytes: [u8; 16]) -> CFUUIDBytes {
     out
 }
 
-/// Whether a node carries the property that marks the plugin.
-fn is_capable(entry: io_object_t) -> bool {
-    let key = CFString::new(CAPABLE);
+/// Whether a node carries the property `key` that marks a plugin.
+fn is_capable(entry: io_object_t, key: &str) -> bool {
+    let key = CFString::new(key);
     // SAFETY: the entry is live and the key is a valid string. The call
     // creates the value, so the wrapper takes it under the create rule.
     let value = unsafe {
@@ -172,8 +172,8 @@ fn is_capable(entry: io_object_t) -> bool {
         .is_some_and(|b| b == CFBoolean::true_value())
 }
 
-/// Find the node above a whole disk that carries the plugin.
-fn capable_node(bsd_name: &str) -> Result<Option<Object>> {
+/// Find the node above a whole disk that carries the property `key`.
+pub(super) fn capable_node(bsd_name: &str, key: &str) -> Result<Option<Object>> {
     let name = CString::new(bsd_name)
         .map_err(|_| Error::host("IOBSDNameMatching", "a zero byte in the name"))?;
     // SAFETY: the name is a valid C string. The matching dictionary goes to
@@ -190,7 +190,7 @@ fn capable_node(bsd_name: &str) -> Result<Option<Object>> {
     let mut here = Object(media);
     // The registry is a few levels deep. The count guards against a loop.
     for _ in 0..32 {
-        if is_capable(here.0) {
+        if is_capable(here.0, key) {
             return Ok(Some(here));
         }
         let mut parent: io_object_t = 0;
@@ -209,7 +209,7 @@ fn capable_node(bsd_name: &str) -> Result<Option<Object>> {
 /// `Ok(None)` means that no node above the drive carries the plugin, so the
 /// drive is not an NVMe drive that macOS reads SMART from.
 pub fn nvme_health(bsd_name: &str) -> Result<Option<RawHealth>> {
-    let Some(node) = capable_node(bsd_name)? else {
+    let Some(node) = capable_node(bsd_name, CAPABLE)? else {
         return Ok(None);
     };
 

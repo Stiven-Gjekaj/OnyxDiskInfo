@@ -55,9 +55,23 @@ pub fn drive_list() -> Result<Box<dyn DriveList>> {
 /// This sends commands to the drive and reads the answers. It writes
 /// nothing. Most hosts need administrator rights for it.
 pub fn read_health(drive: &DriveInfo) -> Result<RawHealth> {
+    read_health_with(drive, false)
+}
+
+/// Read the health data of one drive, as raw bytes. `experimental` also
+/// tries the paths that no drive has answered yet: ATA SMART on macOS.
+pub fn read_health_with(drive: &DriveInfo, experimental: bool) -> Result<RawHealth> {
+    #[cfg(not(target_os = "macos"))]
+    let _ = experimental;
     #[cfg(target_os = "macos")]
     {
-        macos::smart::nvme_health(drive.id.as_str())?.ok_or_else(|| Error::NoHealthData {
+        if let Some(raw) = macos::smart::nvme_health(drive.id.as_str())? {
+            return Ok(raw);
+        }
+        if experimental && let Some(raw) = macos::ata::ata_health(drive.id.as_str())? {
+            return Ok(raw);
+        }
+        Err(Error::NoHealthData {
             name: drive.name.clone(),
             reason: "macOS gives no SMART interface for this drive".to_string(),
         })
@@ -127,7 +141,13 @@ fn smartctl_host() -> Option<smartctl::Host> {
 /// An error other than "no health data", such as missing rights, stops the
 /// chain. A sample with missing rights would only fail the same way.
 pub fn health_record(drive: &DriveInfo) -> Result<Record> {
-    match read_health(drive) {
+    health_record_with(drive, false)
+}
+
+/// The health record of one drive. `experimental` is as for
+/// [`read_health_with`].
+pub fn health_record_with(drive: &DriveInfo, experimental: bool) -> Result<Record> {
+    match read_health_with(drive, experimental) {
         Ok(raw) => return Ok(Record::reported(source_of(drive, &raw), raw.decode()?)),
         Err(Error::NoHealthData { .. }) => {}
         Err(e) => return Err(e),
