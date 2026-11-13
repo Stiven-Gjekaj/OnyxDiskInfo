@@ -8,6 +8,7 @@ use clap::Parser;
 pub mod cli;
 pub mod disk_tests;
 pub mod erase;
+pub mod experimental;
 pub mod format;
 pub mod health;
 pub mod history;
@@ -26,7 +27,11 @@ pub fn run() -> i32 {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::List { json } => list::run(json),
-        Command::Health { drive, json } => health::run(drive, json),
+        Command::Health {
+            drive,
+            json,
+            experimental,
+        } => health::run(drive, json, experimental),
         Command::Scan { drive, json } => disk_tests::run_scan(drive, json),
         Command::Bench {
             drive,

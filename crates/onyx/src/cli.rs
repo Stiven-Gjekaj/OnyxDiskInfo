@@ -30,6 +30,10 @@ pub enum Command {
         /// Print JSON for a script, and not text for a person.
         #[arg(long)]
         json: bool,
+        /// DO NOT TOUCH IF NOT SURE. Also try the paths that no drive has
+        /// answered yet: ATA SMART on macOS.
+        #[arg(long)]
+        experimental: bool,
     },
     /// Read every block of one drive, and time each read. This writes
     /// nothing.
@@ -263,7 +267,16 @@ mod tests {
             cli.command,
             Command::Health {
                 drive: 2,
-                json: true
+                json: true,
+                experimental: false
+            }
+        ));
+        let cli = Cli::try_parse_from(["onyx", "health", "2", "--experimental"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Health {
+                experimental: true,
+                ..
             }
         ));
         assert!(Cli::try_parse_from(["onyx", "health"]).is_err());
