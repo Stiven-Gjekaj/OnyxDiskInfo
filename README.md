@@ -45,7 +45,7 @@ _One tool, the same on Windows, on macOS, and on Linux._
 > file system that Onyx writes. The erase commands of the firmware are
 > experimental, on Linux only, and not tested. `onyx watch` keeps a history of each drive and gives
 > an alert when one gets worse.
-> Version 0.2.0 is out, through Homebrew, Scoop, and a Debian and an RPM
+> Version 1.0.0 is out, through Homebrew, Scoop, and a Debian and an RPM
 > package. winget follows.
 > [docs/roadmap.md](docs/roadmap.md) says what comes next, and
 > [docs/milestones.md](docs/milestones.md) holds every decision and the reason
