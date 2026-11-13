@@ -4,7 +4,8 @@
 //! status, so its tests run on all three hosts. The shim only copies these
 //! values into the structures of the kernel.
 //!
-//! Each command here reads. None of them changes the drive.
+//! Each command here reads, but for the experimental erase commands of
+//! [`crate::firmware`] at the end.
 
 pub use crate::sat::{
     ATA_IDENTIFY, ATA_SMART_READ_DATA, ATA_SMART_READ_THRESHOLDS, AtaCommand, ata_pass_through_16,
@@ -17,6 +18,8 @@ pub struct NvmeCommand {
     pub nsid: u32,
     pub cdw10: u32,
     pub data_len: u32,
+    /// Zero lets the kernel use its own timeout, which is 60 seconds.
+    pub timeout_ms: u32,
 }
 
 /// Identify Controller: opcode 0x06, CNS 1 in command dword 10.
@@ -25,6 +28,7 @@ pub const NVME_IDENTIFY_CONTROLLER: NvmeCommand = NvmeCommand {
     nsid: 0,
     cdw10: 1,
     data_len: 4096,
+    timeout_ms: 0,
 };
 
 /// Get Log Page for the SMART / Health Information log, for the whole
@@ -37,6 +41,7 @@ pub const NVME_HEALTH_LOG: NvmeCommand = NvmeCommand {
     nsid: 0xffff_ffff,
     cdw10: (128 - 1) << 16 | 0x02,
     data_len: 512,
+    timeout_ms: 0,
 };
 
 /// `NVME_IOCTL_ADMIN_CMD`: `_IOWR('N', 0x41, struct nvme_admin_cmd)`, and
@@ -64,14 +69,74 @@ pub fn nvme_command_bytes(command: NvmeCommand, data_address: u64) -> [u8; NVME_
     out[24..32].copy_from_slice(&data_address.to_ne_bytes());
     out[36..40].copy_from_slice(&command.data_len.to_ne_bytes());
     out[40..44].copy_from_slice(&command.cdw10.to_ne_bytes());
+    out[64..68].copy_from_slice(&command.timeout_ms.to_ne_bytes());
     out
 }
+
+/// `NVME_IOCTL_ID`: `_IO('N', 0x40)`. It returns the namespace identifier of
+/// the node.
+pub const NVME_IOCTL_ID: u64 = ioc(0, b'N', 0x40, 0);
+
+/// Identify Namespace: opcode 0x06, CNS 0, for one namespace.
+pub fn nvme_identify_namespace(nsid: u32) -> NvmeCommand {
+    NvmeCommand {
+        opcode: 0x06,
+        nsid,
+        cdw10: 0,
+        data_len: 4096,
+        timeout_ms: 0,
+    }
+}
+
+/// The time that a format gets, in milliseconds: three hours. A format with
+/// User Data Erase can write every block.
+pub const NVME_FORMAT_TIMEOUT_MS: u32 = 3 * 60 * 60 * 1000;
+
+/// Format NVM, opcode 0x80, with command dword 10 from
+/// [`crate::firmware::format_cdw10`]. Experimental.
+pub fn nvme_format(nsid: u32, cdw10: u32) -> NvmeCommand {
+    NvmeCommand {
+        opcode: 0x80,
+        nsid,
+        cdw10,
+        data_len: 0,
+        timeout_ms: NVME_FORMAT_TIMEOUT_MS,
+    }
+}
+
+/// Sanitize, opcode 0x84, for the whole controller, with command dword 10
+/// from [`crate::firmware::sanitize_cdw10`]. Experimental. The drive starts
+/// the sanitize and answers at once.
+pub fn nvme_sanitize(cdw10: u32) -> NvmeCommand {
+    NvmeCommand {
+        opcode: 0x84,
+        nsid: 0,
+        cdw10,
+        data_len: 0,
+        timeout_ms: 0,
+    }
+}
+
+/// Get Log Page for the Sanitize Status log, log 0x81, of 512 bytes.
+pub const NVME_SANITIZE_LOG: NvmeCommand = NvmeCommand {
+    opcode: 0x02,
+    nsid: 0xffff_ffff,
+    cdw10: (128 - 1) << 16 | 0x81,
+    data_len: 512,
+    timeout_ms: 0,
+};
 
 /// `SG_IO`, the ioctl that sends a SCSI command.
 pub const SG_IO: u64 = 0x2285;
 
 /// `SG_DXFER_FROM_DEV`.
 pub const SG_DXFER_FROM_DEV: i32 = -3;
+
+/// `SG_DXFER_TO_DEV`.
+pub const SG_DXFER_TO_DEV: i32 = -2;
+
+/// `SG_DXFER_NONE`.
+pub const SG_DXFER_NONE: i32 = -1;
 
 /// The status fields that `SG_IO` writes back.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -132,6 +197,30 @@ mod tests {
         assert!(bytes[8..24].iter().all(|b| *b == 0));
         assert!(bytes[32..36].iter().all(|b| *b == 0));
         assert!(bytes[44..].iter().all(|b| *b == 0));
+    }
+
+    #[test]
+    fn a_format_carries_its_timeout_after_the_six_command_dwords() {
+        let bytes = nvme_command_bytes(nvme_format(1, 0x200), 0);
+        assert_eq!(bytes[0], 0x80);
+        assert_eq!(&bytes[4..8], &1u32.to_ne_bytes());
+        assert_eq!(&bytes[40..44], &0x200u32.to_ne_bytes());
+        assert_eq!(&bytes[64..68], &NVME_FORMAT_TIMEOUT_MS.to_ne_bytes());
+        assert_eq!(&bytes[36..40], &0u32.to_ne_bytes());
+    }
+
+    #[test]
+    fn the_erase_commands_have_the_numbers_of_the_standard() {
+        // From <linux/nvme_ioctl.h>.
+        assert_eq!(NVME_IOCTL_ID, 0x4e40);
+        assert_eq!(nvme_sanitize(4).opcode, 0x84);
+        assert_eq!(nvme_sanitize(4).nsid, 0);
+        assert_eq!(NVME_SANITIZE_LOG.cdw10, 0x007f_0081);
+        let ns = nvme_identify_namespace(3);
+        assert_eq!(
+            (ns.opcode, ns.nsid, ns.cdw10, ns.data_len),
+            (0x06, 3, 0, 4096)
+        );
     }
 
     #[test]
