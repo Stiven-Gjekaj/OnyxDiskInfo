@@ -6,6 +6,22 @@
 
 Every release is written here, newest first. A version is `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### Added
+
+- Experimental, and not tested on a drive: `onyx health --experimental`
+  also reads the SMART data of a SATA drive on macOS. An internal drive of
+  an Intel Mac has the interface for it. A drive in a USB case has it only
+  with a SAT driver installed.
+- Experimental, and not tested on a drive: `onyx erase --firmware <method>
+  --experimental` tells a drive to erase itself, on Linux. The methods are
+  ATA Secure Erase, ATA Enhanced Secure Erase, NVMe Format with User Data
+  Erase or with Cryptographic Erase, and NVMe Sanitize with Block Erase or
+  with Crypto Erase.
+
+Each experimental path prints "DO NOT TOUCH IF NOT SURE" before it runs.
+
 ## 1.0.0 - 2026-11-13
 
 The first stable release. The program is the same as 0.2.0.
