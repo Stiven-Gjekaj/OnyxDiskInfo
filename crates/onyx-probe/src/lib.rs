@@ -134,6 +134,21 @@ pub fn erase_bus_refusal(bus: onyx_core::Bus, method: firmware::Method) -> Optio
     }
 }
 
+/// Why the erase cannot go to this drive from this host, or `None` when it
+/// can. It asks nothing of the drive, so a caller can ask it before the
+/// person confirms.
+pub fn firmware_erase_refusal(drive: &DriveInfo, method: firmware::Method) -> Option<String> {
+    if !cfg!(target_os = "linux") {
+        let why = if cfg!(target_os = "macos") {
+            "macOS gives a program no way to send an erase command of the firmware."
+        } else {
+            "Only the Linux build of Onyx sends an erase command of the firmware."
+        };
+        return Some(why.to_string());
+    }
+    erase_bus_refusal(drive.bus, method)
+}
+
 /// Send an erase of the firmware to a drive that the caller opened for
 /// writing, and wait until it ends. Experimental: no drive has taken one
 /// from Onyx yet. Only Linux sends one.
@@ -151,7 +166,7 @@ pub fn firmware_erase(
         method: method.name().to_string(),
         reason,
     };
-    if let Some(why) = erase_bus_refusal(drive.bus, method) {
+    if let Some(why) = firmware_erase_refusal(drive, method) {
         return Err(refusal(why));
     }
     #[cfg(target_os = "linux")]
@@ -161,12 +176,7 @@ pub fn firmware_erase(
     #[cfg(not(target_os = "linux"))]
     {
         let _ = (file, step);
-        let host = if cfg!(target_os = "macos") {
-            "macOS gives a program no way to send an erase command of the firmware."
-        } else {
-            "Only the Linux build of Onyx sends an erase command of the firmware."
-        };
-        Err(refusal(host.to_string()))
+        unreachable!("firmware_erase_refusal refuses each host but Linux")
     }
 }
 

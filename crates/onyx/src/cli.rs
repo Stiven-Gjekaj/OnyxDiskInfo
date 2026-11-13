@@ -140,7 +140,37 @@ pub enum Command {
         /// Do not read the last pass back.
         #[arg(long, conflicts_with = "trim")]
         no_check: bool,
+        /// DO NOT TOUCH IF NOT SURE. Tell the drive to erase itself with a
+        /// command of its firmware. Linux only. It needs --experimental.
+        #[arg(
+            long,
+            value_enum,
+            requires = "experimental",
+            conflicts_with_all = ["trim", "passes", "no_check"]
+        )]
+        firmware: Option<FirmwareChoice>,
+        /// Allow a path that no drive has taken yet. Each such path prints
+        /// a warning first.
+        #[arg(long)]
+        experimental: bool,
     },
+}
+
+/// The erase command of the firmware that `onyx erase --firmware` sends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum FirmwareChoice {
+    /// ATA Secure Erase, for a SATA drive.
+    SecureErase,
+    /// ATA Enhanced Secure Erase, for a SATA drive.
+    EnhancedSecureErase,
+    /// NVMe Format with User Data Erase.
+    Format,
+    /// NVMe Format with Cryptographic Erase.
+    CryptoFormat,
+    /// NVMe Sanitize with Block Erase.
+    Sanitize,
+    /// NVMe Sanitize with Crypto Erase.
+    CryptoSanitize,
 }
 
 /// Where the history is, and how to print it.
@@ -360,6 +390,42 @@ mod tests {
         assert!(Cli::try_parse_from(["onyx", "erase", "2", "--trim", "--pass", "zero"]).is_err());
         assert!(Cli::try_parse_from(["onyx", "erase", "2", "--trim", "--no-check"]).is_err());
         assert!(Cli::try_parse_from(["onyx", "erase"]).is_err());
+    }
+
+    #[test]
+    fn a_firmware_erase_needs_the_experimental_flag_and_stands_alone() {
+        let cli = Cli::try_parse_from([
+            "onyx",
+            "erase",
+            "2",
+            "--firmware",
+            "crypto-sanitize",
+            "--experimental",
+        ])
+        .unwrap();
+        let Command::Erase {
+            firmware,
+            experimental,
+            ..
+        } = cli.command
+        else {
+            panic!("not erase");
+        };
+        assert_eq!(firmware, Some(super::FirmwareChoice::CryptoSanitize));
+        assert!(experimental);
+        assert!(Cli::try_parse_from(["onyx", "erase", "2", "--firmware", "format"]).is_err());
+        for other in [["--trim", ""], ["--pass", "zero"], ["--no-check", ""]] {
+            let mut args = vec![
+                "onyx",
+                "erase",
+                "2",
+                "--firmware",
+                "format",
+                "--experimental",
+            ];
+            args.extend(other.iter().filter(|a| !a.is_empty()));
+            assert!(Cli::try_parse_from(args).is_err(), "{other:?}");
+        }
     }
 
     #[test]

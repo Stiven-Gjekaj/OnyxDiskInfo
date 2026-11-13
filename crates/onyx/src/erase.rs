@@ -1,11 +1,16 @@
-//! `onyx erase`: write over every byte of a drive, or TRIM it.
+//! `onyx erase`: write over every byte of a drive, TRIM it, or tell it to
+//! erase itself with a command of its firmware.
 
 use onyx_bench::Device;
 use onyx_bench::erase::{self, EraseReport, Fill};
 use onyx_core::{DriveInfo, Result, human_size};
 
-use crate::cli::{PassChoice, WriteTarget};
-use crate::disk_tests::{Meter, device, open_for_write, run_mark};
+use onyx_core::Error;
+use onyx_probe::firmware::Method;
+
+use crate::cli::{FirmwareChoice, PassChoice, WriteTarget};
+use crate::disk_tests::{Meter, device, find, open_for_write, run_mark};
+use crate::experimental;
 use crate::json::Json;
 
 /// The blocks that the check after a TRIM reads, spread over the drive.
@@ -205,6 +210,101 @@ pub fn run_trim(target: &WriteTarget) -> Result<i32> {
     Ok(0)
 }
 
+/// The method of the firmware for a choice of the command line.
+pub fn method(choice: FirmwareChoice) -> Method {
+    match choice {
+        FirmwareChoice::SecureErase => Method::AtaSecureErase,
+        FirmwareChoice::EnhancedSecureErase => Method::AtaEnhancedSecureErase,
+        FirmwareChoice::Format => Method::NvmeFormat,
+        FirmwareChoice::CryptoFormat => Method::NvmeCryptoFormat,
+        FirmwareChoice::Sanitize => Method::NvmeBlockSanitize,
+        FirmwareChoice::CryptoSanitize => Method::NvmeCryptoSanitize,
+    }
+}
+
+/// What an erase of the firmware found, for a person.
+pub fn firmware_text(drive: &DriveInfo, method: Method, zeros: u64) -> Vec<String> {
+    let mut out = vec![
+        format!(
+            "{} of {} ({}): the drive says that the erase is done.",
+            method.name(),
+            drive.name,
+            drive.id
+        ),
+        format!("{zeros} of {TRIM_SAMPLES} blocks spread over the drive read back as zeros."),
+    ];
+    if zeros < TRIM_SAMPLES {
+        out.push(
+            "Some drives fill an erased block with a pattern of their own and not with zeros. \
+             Run an overwrite pass if no old byte may stay readable."
+                .to_string(),
+        );
+    }
+    out
+}
+
+/// What `onyx erase --firmware --json` prints.
+pub fn firmware_json(drive: &DriveInfo, method: Method, zeros: u64) -> Json {
+    Json::Object(vec![
+        ("id", Json::text(drive.id.as_str())),
+        ("method", Json::text("firmware")),
+        ("firmware", Json::text(method.name())),
+        ("experimental", Json::Bool(true)),
+        ("samples", Json::Number(TRIM_SAMPLES.into())),
+        ("zero_samples", Json::Number(zeros.into())),
+    ])
+}
+
+/// `onyx erase --firmware`: tell the drive to erase itself, then read a
+/// sample. Experimental.
+pub fn run_firmware(target: &WriteTarget, choice: FirmwareChoice) -> Result<i32> {
+    let method = method(choice);
+    experimental::warn(method.name());
+    if let Some(path) = &target.image {
+        return Err(Error::EraseRefused {
+            name: path.display().to_string(),
+            method: method.name().to_string(),
+            reason: "An image file has no firmware.".to_string(),
+        });
+    }
+    // Refuse a host or a drive that cannot take the erase before the
+    // person types the phrase.
+    if let Some(number) = target.drive {
+        let drive = find(number)?;
+        if let Some(reason) = onyx_probe::firmware_erase_refusal(&drive, method) {
+            return Err(Error::EraseRefused {
+                name: drive.name,
+                method: method.name().to_string(),
+                reason,
+            });
+        }
+    }
+    let opened = open_for_write(
+        target,
+        "The erase of the firmware tells the drive to erase every block itself. It",
+    )?;
+    let drive = &opened.drive;
+    let mut last = String::new();
+    onyx_probe::firmware_erase(drive, &opened.file, method, &mut |what, done| {
+        match done {
+            Some(part) => eprint!("\r{what}: {:.1} percent   ", part * 100.0),
+            None if what != last => eprintln!("{what}"),
+            None => {}
+        }
+        last = what.to_string();
+    })?;
+    eprintln!();
+    let zeros = zero_samples(&device(drive, &opened.file)?)?;
+    if target.json {
+        println!("{}", firmware_json(drive, method, zeros));
+    } else {
+        for line in firmware_text(drive, method, zeros) {
+            println!("{line}");
+        }
+    }
+    Ok(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,6 +350,48 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         assert!(result.is_err());
         assert!(bytes.iter().all(|b| *b == 0xA5));
+    }
+
+    #[test]
+    fn a_firmware_erase_of_an_image_is_refused_before_the_phrase() {
+        let size = 1024 * 1024;
+        let path = image("firmware", size);
+        let mut t = target(&path, "wrong phrase");
+        t.confirm = None;
+        let result = run_firmware(&t, FirmwareChoice::SecureErase);
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert!(matches!(result, Err(Error::EraseRefused { .. })));
+        assert!(bytes.iter().all(|b| *b == 0xA5));
+    }
+
+    #[test]
+    fn each_choice_names_its_own_method() {
+        let choices = [
+            FirmwareChoice::SecureErase,
+            FirmwareChoice::EnhancedSecureErase,
+            FirmwareChoice::Format,
+            FirmwareChoice::CryptoFormat,
+            FirmwareChoice::Sanitize,
+            FirmwareChoice::CryptoSanitize,
+        ];
+        let names: std::collections::BTreeSet<_> =
+            choices.iter().map(|c| method(*c).name()).collect();
+        assert_eq!(names.len(), choices.len());
+        assert!(method(FirmwareChoice::SecureErase).is_ata());
+        assert!(!method(FirmwareChoice::CryptoSanitize).is_ata());
+    }
+
+    #[test]
+    fn the_firmware_text_says_when_a_block_holds_more_than_zeros() {
+        let mut drive = DriveInfo::new(DriveId::new("sdz"), "/dev/sdz", "sdz");
+        drive.size_bytes = 1 << 30;
+        let m = Method::AtaSecureErase;
+        assert_eq!(firmware_text(&drive, m, TRIM_SAMPLES).len(), 2);
+        assert!(firmware_text(&drive, m, 3)[2].contains("pattern"));
+        let json = firmware_json(&drive, m, 3).to_string();
+        assert!(json.contains(r#""experimental":true"#), "{json}");
+        assert!(json.contains(r#""firmware":"ATA Secure Erase""#), "{json}");
     }
 
     #[test]

@@ -18,7 +18,7 @@ use crate::cli::WriteTarget;
 use crate::tests_format as format;
 
 /// The drive with this number, from a fresh list.
-fn find(number: usize) -> Result<DriveInfo> {
+pub(crate) fn find(number: usize) -> Result<DriveInfo> {
     let drives = in_list_order(onyx_probe::drive_list()?.drives()?);
     by_index(&drives, number)
         .cloned()

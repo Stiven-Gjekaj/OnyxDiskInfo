@@ -79,8 +79,12 @@ pub fn run() -> i32 {
             passes,
             trim,
             no_check,
+            firmware,
+            experimental: _,
         } => {
-            if trim {
+            if let Some(choice) = firmware {
+                erase::run_firmware(&target, choice)
+            } else if trim {
                 erase::run_trim(&target)
             } else {
                 erase::run_overwrite(&target, &passes, !no_check)
