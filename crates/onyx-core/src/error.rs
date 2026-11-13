@@ -79,6 +79,16 @@ pub enum Error {
         /// The name or the number that the person gave.
         wanted: String,
     },
+    /// The drive cannot take the erase of the firmware that the person
+    /// asked for, and Onyx sent none of it.
+    EraseRefused {
+        /// The drive, as the list names it.
+        name: String,
+        /// The erase, such as "ATA Secure Erase".
+        method: String,
+        /// Why, as the drive says it.
+        reason: String,
+    },
 }
 
 /// The result of an operation in Onyx.
@@ -134,6 +144,14 @@ impl fmt::Display for Error {
             Error::NoSuchDrive { wanted } => {
                 write!(f, "no drive is {wanted}. Run `onyx list` to see the drives")
             }
+            Error::EraseRefused {
+                name,
+                method,
+                reason,
+            } => write!(
+                f,
+                "{name} cannot take {method}, so Onyx sent nothing to it. {reason}"
+            ),
         }
     }
 }
@@ -169,6 +187,20 @@ mod tests {
             wanted: "7".to_string(),
         };
         assert!(e.to_string().contains("onyx list"), "{e}");
+    }
+
+    #[test]
+    fn a_refused_erase_says_that_nothing_was_sent_and_why() {
+        let e = Error::EraseRefused {
+            name: "KINGSTON SA400S37240G".to_string(),
+            method: "ATA Secure Erase".to_string(),
+            reason: "The drive is frozen.".to_string(),
+        };
+        assert_eq!(
+            e.to_string(),
+            "KINGSTON SA400S37240G cannot take ATA Secure Erase, so Onyx sent nothing to it. \
+             The drive is frozen."
+        );
     }
 
     #[test]
