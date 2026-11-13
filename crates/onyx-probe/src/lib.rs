@@ -12,6 +12,7 @@
 
 use onyx_core::{DriveInfo, DriveList, Error, Record, Result};
 
+pub mod firmware;
 mod health;
 pub mod linux;
 pub mod macos;
